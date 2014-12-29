@@ -8,13 +8,14 @@ import Queue
 import select
 import pickle
 import MySQLdb
+from threading import Thread
 
 import config
 from utils import *
 from krcp import *
 
 class DHT(object):
-    def __init__(self, bind_ip="0.0.0.0", bind_port=12345, boostart=("router.utorrent.com", 6881), root=None, id=None, ignored_ip=[]):
+    def __init__(self, bind_port, bind_ip="0.0.0.0", root=None, id=None, ignored_ip=[]):
         self.myid = ID() if id is None else id
         self.root = BucketTree(bucket=Bucket(), split_ids=[self.myid]) if root is None else root
         if not self.myid in self.root.split_ids:
@@ -26,10 +27,11 @@ class DHT(object):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind((bind_ip, bind_port))
         self.messages = Queue.Queue()
-        self.root_heigth = self.root.heigth()
+        self.root_heigth = 0
         self.last_routine = 0
         self.last_clean = time.time()
         self.ignored_ip = ignored_ip
+        self.stop = False
 
     def add_peer(self, info_hash, ip, port):
         if not info_hash in self.peers:
@@ -49,19 +51,23 @@ class DHT(object):
     
     def bootstarp(self):
         print "Bootstraping"
-        find_node1=FindNodeQuery(self.get_transaction_id(FindNodeResponse), id, id)
-        find_node2=FindNodeQuery(self.get_transaction_id(FindNodeResponse), id, id)
-        find_node3=FindNodeQuery(self.get_transaction_id(FindNodeResponse), id, id)
+        find_node1=FindNodeQuery(self.get_transaction_id(FindNodeResponse), self.myid, self.myid)
+        find_node2=FindNodeQuery(self.get_transaction_id(FindNodeResponse), self.myid, self.myid)
+        find_node3=FindNodeQuery(self.get_transaction_id(FindNodeResponse), self.myid, self.myid)
         self.sock.sendto(str(find_node1), ("router.utorrent.com", 6881))
         self.sock.sendto(str(find_node2), ("genua.fr", 6880))
         self.sock.sendto(str(find_node3), ("dht.transmissionbt.com", 6881))
 
     def save(self):
-        pickle.dump(self.root, open("dht.status", 'w+'))
+        myid = "".join("{:02x}".format(ord(c)) for c in self.myid)
+        pickle.dump(self.root, open("dht_%s.status" % myid, 'w+'))
 
-    def load(self):
+    def load(self, file=None):
+        if file is None:
+            myid = "".join("{:02x}".format(ord(c)) for c in self.myid)
+            file = "dht_%s.status" % myid
         try:
-            self.root = pickle.load(open("dht.status"))
+            self.root = pickle.load(open(file))
         except IOError:
             self.bootstarp()
 
@@ -77,13 +83,15 @@ class DHT(object):
 
     def loop(self):
         while True:
+            if self.stop:
+                return
             try:
                 (sockets,_,_) = select.select([self.sock], [], [], 1)
             except KeyboardInterrupt:
                 self.save()
                 raise
             if sockets:
-                data, addr = dht.sock.recvfrom(4048)
+                data, addr = self.sock.recvfrom(4048)
                 if addr in self.ignored_ip:
                     continue
                 try:
@@ -100,8 +108,8 @@ class DHT(object):
                             self.root.add(self, node)
                         reponse = obj.response(self, ip=addr[0])
                         if isinstance(obj, GetPeersQuery) or isinstance(obj, AnnouncePeerQuery):
-                            print "R:%r" % obj
-                            print "S:%r" % reponse
+                            print "R:%r" % "".join("{:02x}".format(ord(c)) for c in obj["info_hash"])
+                            #print "S:%r" % reponse
                         self.sock.sendto(str(reponse), addr)
                     elif isinstance(obj, BResponse):
                         try:
@@ -561,8 +569,41 @@ class RoutingTable(object):
 
 
 
-id = ID('\x8c\xc4[\xb1\xae\x8c\x8b\x00\x98dz\xd7%\xc3\x12\xda\xc4iSl')
-dht = DHT(bind_port=12345, id=id, ignored_ip=["188.165.207.160", "127.0.0.1", "10.8.0.1", "10.9.0.1", "192.168.10.1", "192.168.10.100", "192.168.10.101"])
-dht.load()
-mynode=Node(id=id, ip="188.165.207.160", port=12345)
-dht.root.add(dht, mynode)
+id1 = ID('\x8c\xc4[\xb1\xae\x8c\x8b\x00\x98dz\xd7%\xc3\x12\xda\xc4iSl')
+dht1 = DHT(bind_port=12345, id=id1, ignored_ip=["188.165.207.160", "127.0.0.1", "10.8.0.1", "10.9.0.1", "192.168.10.1", "192.168.10.100", "192.168.10.101"])
+
+dht1.load()
+
+id2 = ID(id1 ^ utils.nflip("\0"*20, 0))
+dht2 = DHT(bind_port=12370, id=id2, root=dht1.root, ignored_ip=["188.165.207.160", "127.0.0.1", "10.8.0.1", "10.9.0.1", "192.168.10.1", "192.168.10.100", "192.168.10.101"])
+
+id3 = ID(id1 ^ utils.nflip("\0"*20, 1))
+dht3 = DHT(bind_port=12371, id=id3, root=dht1.root, ignored_ip=["188.165.207.160", "127.0.0.1", "10.8.0.1", "10.9.0.1", "192.168.10.1", "192.168.10.100", "192.168.10.101"])
+
+id4 = ID(id2 ^ utils.nflip("\0"*20, 1))
+dht4 = DHT(bind_port=12372, id=id4, root=dht1.root, ignored_ip=["188.165.207.160", "127.0.0.1", "10.8.0.1", "10.9.0.1", "192.168.10.1", "192.168.10.100", "192.168.10.101"])
+
+
+dhts = [dht1, dht2, dht3, dht4]
+
+def lauch():
+    ts = []
+    for dht in dhts:
+        ts.append(Thread(target=dht.loop))
+        dht.stop = False
+    for t in ts:
+        t.start()
+    try:
+        while True:
+            for t in ts:
+                if not t.is_alive():
+                    raise Exception("Stoped")
+            time.sleep(1)
+    except:
+        stop()
+        raise
+
+def stop():
+    for dht in dhts:
+        dht.stop = True
+    dht1.save()

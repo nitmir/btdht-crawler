@@ -46,7 +46,7 @@ class ID(object):
         elif isinstance(other, str):
             return self.value == other
         else:
-            return false
+            return False
 
     def __lt__(self, other):
         if isinstance(other, ID):
@@ -84,8 +84,8 @@ def _bencode(obj):
         return b"i" + str(obj).encode() +  b"e"
     elif isinstance(obj, bytes):
         return str(len(obj)).encode() + b":" + obj
-    elif isinstance(obj, str) or isinstance(obj, ID):
-        return str(len(obj)).encode() + b":" + str(obj).encode()
+    elif isinstance(obj, ID):
+        return str(len(obj)).encode() + b":" + str(obj)
     elif isinstance(obj, list):
         return b"l" + b"".join(_bencode(o) for o in obj) + b"e"
     elif isinstance(obj, dict):
