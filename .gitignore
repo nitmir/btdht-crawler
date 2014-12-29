@@ -1,0 +1,5 @@
+*.pyc
+aria2.session
+dht.status
+pyaria2/*
+torrents/*
