@@ -77,23 +77,25 @@ def bencode(obj):
     try:
         return _bencode(obj)
     except:
-        print "%r" % obj
+        print("%r" % obj)
         raise
 def _bencode(obj):
     if isinstance(obj, int):
-        return "i%de" % obj
+        return b"i" + str(obj).encode() +  b"e"
+    elif isinstance(obj, bytes):
+        return str(len(obj)).encode() + b":" + obj
     elif isinstance(obj, str) or isinstance(obj, ID):
-        return "%d:%s" % (len(obj), obj)
+        return str(len(obj)).encode() + b":" + str(obj).encode()
     elif isinstance(obj, list):
-        return "l" + "".join(_bencode(o) for o in obj) + "e"
+        return b"l" + b"".join(_bencode(o) for o in obj) + b"e"
     elif isinstance(obj, dict):
-        l = obj.items()
+        l = list(obj.items())
         l.sort()
         d = []
         for (k, v) in l:
             d.append(k)
             d.append(v)
-        return "d" + "".join(_bencode(o) for o in d) + "e"
+        return b"d" + b"".join(_bencode(o) for o in d) + b"e"
     else:
         raise EnvironmentError("Can only encode int, str, list or dict, not %s" % type(obj).__name__)
 
@@ -103,51 +105,52 @@ def bdecode(s):
 def _bdecode(s):
     if not s:
         raise BcodeError("Empty bcode")
-    if s[0] == "i":
+    if s[0:1] == b"i":
         try:
-            i, todo = s.split('e', 1)
+            i, todo = s.split(b'e', 1)
             return (int(i[1:]), todo)
         except (ValueError, TypeError):
             raise BcodeError("Not an integer %r" % s)
-    elif s[0] in ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']:
+    elif s[0:1] in [b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9']:
         try:
-            length, string = s.split(':', 1)
+            length, string = s.split(b':', 1)
             length = int(length)
             return (string[0:length], string[length:])
         except (ValueError, TypeError):
             raise BcodeError("Not a string %r" % s)
-    elif s[0] == 'l':
+    elif s[0:1] == b'l':
         l = []
         try:
-            if s[1] == "e":
-                return l
+            if s[1:2] == b"e":
+                return (l, s[2:])
             item, todo = _bdecode(s[1:])
             l.append(item)
-            while todo[0] != "e":
+            while todo[0:1] != b"e":
                 item, todo = _bdecode(todo)
                 l.append(item)
             return (l, todo[1:])
         except (ValueError, TypeError, IndexError):
             raise BcodeError("Not a list %r" % s)
-    elif s[0] == 'd':
+    elif s[0:1] == b'd':
         d = {}
         try:
-            if s[1] == "e":
-                return l
+            if s[1:2] == b"e":
+                return d, s[2:]
             key, todo = _bdecode(s[1:])
-            if todo[0] == "e":
+            if todo[0:1] == b"e":
                 raise BcodeError("Not bencoded string")
             value, todo = _bdecode(todo)
             d[key] = value
-            while todo[0] != "e":
+            while todo[0:1] != b"e":
                 key, todo = _bdecode(todo)
-                if todo[0] == "e":
+                if todo[0:1] == b"e":
                     raise BcodeError("Not bencoded string")
+                #print(todo)
                 value, todo = _bdecode(todo)
                 d[key] = value
             return (d, todo[1:])
-        except (ValueError, TypeError, IndexError):
-            raise BcodeError("Not a dict %r" % s)
+        except (ValueError, TypeError, IndexError) as e:
+            raise BcodeError("Not a dict %r\n%r" % (s, e))
     else:
-        raise BcodeError("Not bencoded string")
+        raise BcodeError("Not bencoded string %s" % s)
 

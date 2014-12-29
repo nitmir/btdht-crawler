@@ -33,6 +33,7 @@ class GetPeersQuery(BQuery):
     def __init__(self, t, id, info_hash):
          super(GetPeersQuery, self).__init__(t, "get_peers", {"id" : id, "info_hash" : info_hash})
     def response(self, dht, ip, **kwargs):
+        dht.update_hash(self.a["info_hash"], get=True)
         token = dht.get_token(ip)
         nodes = dht.get_closest_node(self.a["info_hash"])
         values = dht.get_peers(self.a["info_hash"])
@@ -51,6 +52,7 @@ class AnnouncePeerQuery(BQuery):
     def response(self, dht, ip, **kwargs):
         if self.a["token"] != dht.get_token(ip):
             raise ProtocolError("Bad token")
+        dht.update_hash(self.a["info_hash"], get=False)
         dht.add_peer(info_hash=self.a["info_hash"], ip=ip, port=self.a["port"])
         return AnnouncePeerResponse(self.t, dht.myid)
 
@@ -77,9 +79,9 @@ class FindNodeResponse(BResponse):
         return utils.bencode({"y":self.y, "t":self.t, "r":{"id" : self.r["id"], "nodes" : "".join((n.compact_info() for n in self.r["nodes"]))}})
 class GetPeersResponse(BResponse):
     def __init__(self, t, id, token, values=None, nodes=None):
-        if nodes:
+        if nodes is not None:
             super(GetPeersResponse, self).__init__(t, {"id" : id, "token": token, "nodes":nodes})
-        elif values:
+        elif values is not None:
             super(GetPeersResponse, self).__init__(t, {"id" : id, "token": token, "values":values})
         else:
             raise ValueError("values or nodes needed")

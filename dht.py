@@ -6,13 +6,16 @@ import struct
 import socket
 import Queue
 import select
+import pickle
+import MySQLdb
 
+import config
 from utils import *
 from krcp import *
 
 class DHT(object):
-    def __init__(self, bind_ip="0.0.0.0", bind_port=12345, boostart=("router.utorrent.com", 6881), root=None):
-        self.myid = ID()
+    def __init__(self, bind_ip="0.0.0.0", bind_port=12345, boostart=("router.utorrent.com", 6881), root=None, id=None, ignored_ip=[]):
+        self.myid = ID() if id is None else id
         self.root = BucketTree(bucket=Bucket(), split_ids=[self.myid]) if root is None else root
         if not self.myid in self.root.split_ids:
             self.root.split_ids.append(self.myid)
@@ -25,6 +28,8 @@ class DHT(object):
         self.messages = Queue.Queue()
         self.root_heigth = self.root.heigth()
         self.last_routine = 0
+        self.last_clean = time.time()
+        self.ignored_ip = ignored_ip
 
     def add_peer(self, info_hash, ip, port):
         if not info_hash in self.peers:
@@ -42,40 +47,84 @@ class DHT(object):
     def get_closest_node(self, id):
         return list(self.root.get_closest_nodes(id))
     
+    def bootstarp(self):
+        print "Bootstraping"
+        find_node1=FindNodeQuery(self.get_transaction_id(FindNodeResponse), id, id)
+        find_node2=FindNodeQuery(self.get_transaction_id(FindNodeResponse), id, id)
+        find_node3=FindNodeQuery(self.get_transaction_id(FindNodeResponse), id, id)
+        self.sock.sendto(str(find_node1), ("router.utorrent.com", 6881))
+        self.sock.sendto(str(find_node2), ("genua.fr", 6880))
+        self.sock.sendto(str(find_node3), ("dht.transmissionbt.com", 6881))
+
+    def save(self):
+        pickle.dump(self.root, open("dht.status", 'w+'))
+
+    def load(self):
+        try:
+            self.root = pickle.load(open("dht.status"))
+        except IOError:
+            self.bootstarp()
+
+    def update_hash(self, info_hash, get):
+        db = MySQLdb.connect(**config.mysql)
+        cur = db.cursor()
+        if get:
+            cur.execute("INSERT INTO torrents (hash, dht_last_get) VALUES (%s,NOW()) ON DUPLICATE KEY UPDATE dht_last_get=NOW();",("".join("{:02x}".format(ord(c)) for c in info_hash),))
+        else:
+            cur.execute("INSERT INTO torrents (hash, dht_last_announce) VALUES (%s,NOW()) ON DUPLICATE KEY UPDATE dht_last_announce=NOW();",("".join("{:02x}".format(ord(c)) for c in info_hash),))
+        db.commit()
+        db.close()
+
     def loop(self):
         while True:
-            (sockets,_,_) = select.select([self.sock], [], [], 1)
+            try:
+                (sockets,_,_) = select.select([self.sock], [], [], 1)
+            except KeyboardInterrupt:
+                self.save()
+                raise
             if sockets:
                 data, addr = dht.sock.recvfrom(4048)
-                obj = self.decode(data)
-                print "R:%r" % obj
-                if isinstance(obj, BQuery):
-                    try:
-                        node = self.root.get_node(obj["id"])
-                        node.last_query = time.time()
-                        node.ip = addr[0]
-                        node.port = addr[1]
-                    except NotFound:
-                        node = Node(id=obj["id"], ip=addr[0], port=addr[1])
-                        node.last_query = time.time()
-                        self.root.add(self, node)
-                    reponse = obj.response(self, ip=addr[0])
-                    print "S:%r" % reponse
-                    self.sock.sendto(str(reponse), addr)
-                elif isinstance(obj, BResponse):
-                    try:
-                        node = self.root.get_node(obj["id"])
-                        node.last_response = time.time()
-                        node.ip = addr[0]
-                        node.port = addr[1]
-                        node.failed = 0
-                    except NotFound:
-                        node = Node(id=obj["id"], ip=addr[0], port=addr[1])
-                        node.last_response = time.time()
-                        self.root.add(self, node)
-                    self.process_response(obj)
+                if addr in self.ignored_ip:
+                    continue
+                try:
+                    obj = self.decode(data)
+                    if isinstance(obj, BQuery):
+                        try:
+                            node = self.root.get_node(obj["id"])
+                            node.last_query = time.time()
+                            node.ip = addr[0]
+                            node.port = addr[1]
+                        except NotFound:
+                            node = Node(id=obj["id"], ip=addr[0], port=addr[1])
+                            node.last_query = time.time()
+                            self.root.add(self, node)
+                        reponse = obj.response(self, ip=addr[0])
+                        if isinstance(obj, GetPeersQuery) or isinstance(obj, AnnouncePeerQuery):
+                            print "R:%r" % obj
+                            print "S:%r" % reponse
+                        self.sock.sendto(str(reponse), addr)
+                    elif isinstance(obj, BResponse):
+                        try:
+                            node = self.root.get_node(obj["id"])
+                            node.last_response = time.time()
+                            node.ip = addr[0]
+                            node.port = addr[1]
+                            node.failed = 0
+                        except NotFound:
+                            node = Node(id=obj["id"], ip=addr[0], port=addr[1])
+                            node.last_response = time.time()
+                            self.root.add(self, node)
+                        self.process_response(obj)
+                except BError as error:
+                    self.sock.sendto(str(error), addr)
+                except BcodeError:
+                    self.sock.sendto(str(ProtocolError("", "malformed packet")), addr)
+                except KeyboardInterrupt:
+                    self.save()
+                    raise
+
                 #print self.root
-            if time.time() - self.last_routine > 15:
+            if time.time() - self.last_routine >= 5:
                 self.last_routine = time.time()
                 self.routine()
                     
@@ -96,17 +145,29 @@ class DHT(object):
             self.token[ip] = (id, time.time())
             return id
 
-    def routine(self):
+    def clean(self):
         now = time.time()
+        if now - self.last_clean < 15 * 60:
+            return
+        self.save()
         for id in self.transaction_type.keys():
             if now - self.transaction_type[id][1] > 15 * 60:
                 del self.transaction_type[id]
+        self.last_clean = now
+
+    def routine(self):
+        now = time.time()
+        self.clean()
         if self.root_heigth != self.root.heigth():
             nodes = self.get_closest_node(self.myid)
             if nodes:
-                self.root_heigth = self.root.heigth()
+                self.root_heigth += 1
             for node in nodes:
                 node.find_node(self, self.myid)
+        (nodes, goods, bads) = self.root.stats()
+        if goods == 0:
+            self.bootstarp()
+        print "%d nodes, %d goods, %d bads" % (nodes, goods, bads)
         for bucket in iter(self.root):
             if now - bucket.last_changed > 15 * 60:
                 id = bucket.random_id()
@@ -119,9 +180,13 @@ class DHT(object):
                 good[-1].find_node(self, id)
             elif id and questionable:
                 questionable[-1].find_node(self, id)
-            elif questionable:
-                #questionable[-1].ping(self)
-                questionable[-1].find_node(self, self.myid)
+            elif id:
+                nodes = self.get_closest_node(id)
+                nodes.sort()
+                if nodes:
+                    nodes[-1].find_node(self, id)
+            if questionable:
+                questionable[-1].ping(self)
 
     def process_response(self, obj):
         if isinstance(obj, PingResponse):
@@ -131,14 +196,18 @@ class DHT(object):
                 self.root.add(self, node)
         elif isinstance(obj, GetPeersResponse):
             self.mytoken[obj["id"]]=obj["token"]
-        elif obj == AnnouncePeerResponse:
+            for nodes in obj.r.get("nodes", []):
+                self.root.add(self, node)
+            #print "R:%r" % obj
+        elif isinstance(obj, AnnouncePeerResponse):
+            #print "R:%r" % obj
             pass
         else:
             raise MethodUnknownError("", "%r" % obj)
     def decode(self, s):
         d = bdecode(s)
         if not isinstance(d, dict):
-            raise ProtocolError("", "Message send is not a directory")
+            raise ProtocolError("", "Message send is not a dict")
         if d["y"] == "q":
             if d["q"] == "ping":
                 return PingQuery(d["t"], d["a"]["id"])
@@ -156,7 +225,7 @@ class DHT(object):
                 if ttype == PingResponse:
                     ret = PingResponse(d["t"], d["r"]["id"])
                 elif ttype == FindNodeResponse:
-                    ret = FindNodeResponse(d["t"], d["r"]["id"], Node.from_compact_infos(d["r"]["nodes"]))
+                    ret = FindNodeResponse(d["t"], d["r"]["id"], Node.from_compact_infos(d["r"].get("nodes", "")))
                 elif ttype == GetPeersResponse:
                     if "values" in d["r"]:
                         ret = GetPeersResponse(d["t"], d["r"]["id"], d["r"]["token"], values=d["r"]["values"])
@@ -167,13 +236,13 @@ class DHT(object):
                 elif ttype == AnnouncePeerResponse:
                     ret = AnnouncePeerResponse(d["t"], d["r"]["id"])
                 else:
-                    raise MethodUnknownError(d["t"])
+                    raise MethodUnknownError(d["t"], "Method unknown %s" % ttype.__name__)
                 del self.transaction_type[d["t"]]
                 return ret
             else:
                 raise GenericError(d["t"], "transaction id unknown")
         elif d["y"] == "e":
-            pass
+            print "ERROR:%r" % d
 
 
 
@@ -198,7 +267,7 @@ class Node(object):
         return "Node: %s:%s" % (self.ip, self.port)
 
     def compact_info(self):
-        return struct.pack("20s4sH", str(self.id), socket.inet_aton(self.ip), self.port)
+        return struct.pack("!20s4sH", str(self.id), socket.inet_aton(self.ip), self.port)
 
     @classmethod
     def from_compact_infos(cls, infos):
@@ -216,7 +285,7 @@ class Node(object):
     def from_compact_info(cls, info):
         if len(info) != 26:
             raise EnvironmentError("compact node info should be 26 chars long")
-        (id, ip, port) = struct.unpack("20s4sH", info)
+        (id, ip, port) = struct.unpack("!20s4sH", info)
         ip = socket.inet_ntoa(ip)
         id = ID(id)
         return cls(id, ip, port)
@@ -251,21 +320,21 @@ class Node(object):
     def ping(self, dht):
         t = dht.get_transaction_id(PingResponse)
         msg = PingQuery(t, dht.myid)
-        print "S:%r" % msg
+        #print "S:%r" % msg
         self.failed+=1
         dht.sock.sendto(str(msg), (self.ip, self.port))
 
     def find_node(self, dht, target):
         t = dht.get_transaction_id(FindNodeResponse)
         msg = FindNodeQuery(t, dht.myid, target)
-        print "S:%r" % msg
+        #print "S:%r" % msg
         self.failed+=1
         dht.sock.sendto(str(msg), (self.ip, self.port))
 
     def get_peers(self, dht, info_hash):
         t = dht.get_transaction_id(GetPeersResponse)
         msg = GetPeersQuery(t, dht.myid, info_hash, )
-        print "S:%r" % msg
+        #print "S:%r" % msg
         self.failed+=1
         dht.sock.sendto(str(msg), (self.ip, self.port))
 
@@ -274,7 +343,7 @@ class Node(object):
             t = dht.get_transaction_id(AnnouncePeerResponse)
             token = dht.mytoken[self.id]
             msg = AnnouncePeerQuery(t, dht.myid, info_hash, port, token)
-            print "S:%r" % msg
+            #print "S:%r" % msg
             self.failed+=1
             dht.sock.sendto(str(msg), (self.ip, self.port))
         else:
@@ -302,7 +371,10 @@ class Bucket(list):
         id_end = id[self.id_length/8]
         tmp = ''
         if self.id_length>0:
-            id_start = self.id[self.id_length/8]
+            try:
+               id_start = self.id[self.id_length/8]
+            except IndexError:
+                id_start = "\0"
             for i in range((self.id_length % 8)):
                 tmp +=str(nbit(id_start, i))
         for i in range((self.id_length % 8), 8):
@@ -373,6 +445,22 @@ class BucketTree(object):
         self.parent = parent
         self.split_ids=split_ids
 
+    def stats(self):
+        nodes = 0
+        goods = 0
+        bads = 0
+        others = 0
+        for b in self:
+            for n in b:
+                nodes+=1
+                if n.good:
+                    goods+=1
+                elif n.bad:
+                    bads+=1
+                else:
+                    others+=1
+        return (nodes, goods, bads)
+
     def heigth(self):
         if self.bucket is None:
             return 1 + max(self.zero.heigth(), self.one.heigth())
@@ -436,7 +524,10 @@ class BucketTree(object):
                 if n.good:
                     nodes.add(n)
             done.add(bt)
-            return self.get_closest_nodes(id, bt.parent, nodes, done)
+            if bt.parent is not None:
+                return self.get_closest_nodes(id, bt.parent, nodes, done)
+            else:
+                return nodes
         elif bt.one and bt.zero:
             nodes1 = self.get_closest_nodes(id, bt.one, nodes, done)
             nodes0 = self.get_closest_nodes(id, bt.zero, nodes, done)
@@ -469,19 +560,9 @@ class RoutingTable(object):
         pass
 
 
-n1 = Node(ID(), "", "")
-n2 = Node(ID(), "", "")
-n3 = Node(ID(), "", "")
-n4 = Node(ID(), "", "")
-n5 = Node(ID(), "", "")
-n6 = Node(ID(), "", "")
-n7 = Node(ID(), "", "")
-n8 = Node(ID(), "", "")
 
-
-id = ID()
-dht = DHT()
-find_node=FindNodeQuery("aa", id, id)
-dht.transaction_type["aa"] = (FindNodeResponse, time.time())
-dht.sock.sendto(str(find_node), ("router.utorrent.com", 6881))
-#data, addr = dht.sock.recvfrom(1024)
+id = ID('\x8c\xc4[\xb1\xae\x8c\x8b\x00\x98dz\xd7%\xc3\x12\xda\xc4iSl')
+dht = DHT(bind_port=12345, id=id, ignored_ip=["188.165.207.160", "127.0.0.1", "10.8.0.1", "10.9.0.1", "192.168.10.1", "192.168.10.100", "192.168.10.101"])
+dht.load()
+mynode=Node(id=id, ip="188.165.207.160", port=12345)
+dht.root.add(dht, mynode)
