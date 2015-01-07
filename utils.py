@@ -2,7 +2,7 @@
 from functools import total_ordering
 def nbit(s, n):
     """Renvois la valeur du nième bit de la chaine s"""
-    c=s[n/8]
+    c=str(s)[n/8]
     return int(format(ord(c), '08b')[n % 8])
 
 def nflip(s, n):
@@ -10,8 +10,33 @@ def nflip(s, n):
     bit = [0b10000000, 0b01000000, 0b00100000, 0b00010000, 0b00001000, 0b00000100, 0b00000010, 0b00000001]
     return s[:n/8]  + chr(ord(s[n/8]) ^ bit[n % 8]) + s[n/8+1:]
 
+def nset(s, n , i):
+    bit1 = [0b10000000, 0b01000000, 0b00100000, 0b00010000, 0b00001000, 0b00000100, 0b00000010, 0b00000001]
+    bit0 = [0b01111111, 0b10111111, 0b11011111, 0b11101111, 0b11110111, 0b11111011, 0b11111101, 0b11111110]
+    if i == 1:
+        return s[:n/8]  + chr(ord(s[n/8]) | bit1[n % 8]) + s[n/8+1:]
+    elif i == 0:
+        return s[:n/8]  + chr(ord(s[n/8]) & bit0[n % 8]) + s[n/8+1:]
+    else:
+        raise ValueError("i doit être 0 ou 1")
+    
+def format_hash(hash):
+    return "".join("{:02x}".format(ord(c)) for c in hash)
+
 class BcodeError(Exception):
     pass
+
+def enumerate_ids(size, id):
+    def aux(lvl, ids):
+        if lvl >= 0:
+            l = []
+            for id in ids:
+                l.append(nset(id, lvl, 0))
+                l.append(nset(id, lvl, 1))
+            return aux(lvl - 1, l)
+        else:
+            return ids
+    return aux(size - 1, [id])
 
 def random(size):
     with open("/dev/urandom") as f:
@@ -80,7 +105,7 @@ def bencode(obj):
         print("%r" % obj)
         raise
 def _bencode(obj):
-    if isinstance(obj, int):
+    if isinstance(obj, int) or isinstance(obj, float):
         return b"i" + str(obj).encode() +  b"e"
     elif isinstance(obj, bytes):
         return str(len(obj)).encode() + b":" + obj
@@ -110,6 +135,11 @@ def _bdecode(s):
             i, todo = s.split(b'e', 1)
             return (int(i[1:]), todo)
         except (ValueError, TypeError):
+            # On essaye avec un float même si c'est mal
+            try:
+                return (float(i[1:]), todo)
+            except:
+                pass
             raise BcodeError("Not an integer %r" % s)
     elif s[0:1] in [b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9']:
         try:
