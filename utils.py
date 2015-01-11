@@ -51,7 +51,10 @@ class ID(object):
         if id is None:
             self.value = self.__generate()
         else:
-            self.value = id
+            self.value = str(id)
+
+    def encode(self, c):
+        return self.value.encode(c)
 
     def startswith(self, s):
         return self.value.startswith(s)
@@ -63,7 +66,7 @@ class ID(object):
         return self.value
 
     def __repr__(self):
-        return repr(self.value)
+        return self.value.encode("hex")
 
     def __eq__(self, other):    
         if isinstance(other, ID):
