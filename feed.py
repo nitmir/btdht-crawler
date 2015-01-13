@@ -58,6 +58,9 @@ def scrape(db):
     qhashs = queue.Queue()
     i=0
     n_count = 0
+
+    if count <= 0:
+        return
     while hashs[i:i+74]:
         qhashs.put(hashs[i:i+74])
         i=min(i + 74, count)
@@ -67,23 +70,28 @@ def scrape(db):
         nonlocal n_count, count, pbar
         db = MySQLdb.connect(**config.mysql)
         cur = db.cursor()
+        last_commit = time.time()
         try:
             while True:
                 l = qhashs.get(timeout=0)
                 for hash, info in scraper.scrape("udp://open.demonii.com:1337/announce", l).items():
                     cur.execute("UPDATE torrents SET scrape_date=NOW(), seeders=%s, leechers=%s, downloads_count=%s WHERE hash=%s", (info['seeds'], info['peers'], info['complete'], hash))
-                db.commit()
+                if time.time() - last_commit > 30:
+                    db.commit()
+                    last_commit = time.time()
                 n_count+=70
                 pbar.update(min(n_count, count))
         except queue.Empty:
             pass
+        except socket.timeout:
+            print("socket timeout")
         finally:
             db.commit()
             db.close()
 
     try:
         threads = []
-        for i in range(0, 10):
+        for i in range(0, 20):
             t = Thread(target=scrape_thread, args=(qhashs,))
             t.start()
             threads.append(t)
@@ -144,6 +152,8 @@ def clean(db, hashs=None):
     global aria2, downloading
     if hashs is None:
         hashs = set(get_hash(db))
+    if not hashs:
+        return
     downloading = get_to_download(aria2)
     active = aria2.tellActive(keys=["infoHash", "gid"])
     progress = progressbar.ProgressBar(widgets=widget("hash removed from aria2"))
@@ -216,15 +226,20 @@ def fetch_torrent(db):
         cur = db.cursor()
         try:
             while True:
-                load_url(db, cur, qhashs.get(timeout=0))
+                hash = qhashs.get(timeout=0)
+                load_url(db, cur, hash)
         except queue.Empty:
             pass
+        except socket.timeout:
+            print("socket timeout http://torcache.net/torrent/%s.torrent" % hash.upper())
+        except ConnectionResetError:
+            print("ConnectionResetError http://torcache.net/torrent/%s.torrent" % hash.upper())
         finally:
             db.commit()
             db.close()
     try:
         threads = []
-        for i in range(0, 10):
+        for i in range(0, 20):
             t = Thread(target=process_hashs, args=(hashs,))
             t.start()
             threads.append(t)
@@ -403,8 +418,13 @@ def update_db(db, hashs=None, torcache=None, quiet=False):
     if hashs is None:
         progress = progressbar.ProgressBar(widgets=widget("torrents"))
         quiet=True
-        hashs = progress(get_hash(db))
+        hashs = get_hash(db)
+        if not hashs:
+            return
+        hashs = progress(hashs)
         print("Update db")
+    if not hashs:
+        return
     try:
         for hash in hashs:
             if os.path.isfile("torrents/%s.torrent" % hash) and not hash in failed:
