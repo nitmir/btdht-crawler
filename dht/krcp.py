@@ -54,7 +54,7 @@ class FindNodeQuery(BQuery):
         target = check_id(t, target)
         super(FindNodeQuery, self).__init__(t, {"id" : ID(id), "target" : ID(target)}, addr)
     def response(self, dht, **kwargs):
-        return FindNodeResponse(self.t, dht.myid, dht.get_closest_node(self.a["target"]))
+        return FindNodeResponse(self.t, dht.myid, dht.get_closest_nodes(self.a["target"]))
 
 class GetPeersQuery(BQuery):
     q = "get_peers"
@@ -64,19 +64,19 @@ class GetPeersQuery(BQuery):
         info_hash = check_id(t, info_hash)
         super(GetPeersQuery, self).__init__(t, {"id" : ID(id), "info_hash" : ID(info_hash)}, addr)
     def response(self, dht, **kwargs):
-        token = dht.get_token(self.addr[0])
-        nodes = dht.get_closest_node(self.a["info_hash"])
-        values = dht.get_peers(self.a["info_hash"])
+        token = dht._get_token(self.addr[0])
+        values = dht._get_peers(self.a["info_hash"])
         if values:
             return GetPeersResponse(self.t, dht.myid, token, values=values)
         else:
+            nodes = dht.get_closest_nodes(self.a["info_hash"])
             return GetPeersResponse(self.t, dht.myid, token, nodes=nodes)
 
 class AnnouncePeerQuery(BQuery):
     q = "announce_peer"
     def __init__(self, t, id, info_hash, port, token, implied_port=None, addr=None):
         check_str(t, t)
-        check_str(t, token)
+        #check_str(t, token)
         check_str(t, t)
         check_int(t, port)
         id = check_id(t, id)
@@ -87,7 +87,7 @@ class AnnouncePeerQuery(BQuery):
         else:
             super(AnnouncePeerQuery, self).__init__(t, {"id" : ID(id), "info_hash" : ID(info_hash), "port" : port, "token" : ID(token)}, addr)
     def response(self, dht, **kwargs):
-        if not self.a["token"] in dht.get_valid_token(self.addr[0]):
+        if not self.a["token"] in dht._get_valid_token(self.addr[0]):
             raise ProtocolError("Bad token")
         return AnnouncePeerResponse(self.t, dht.myid)
 
@@ -115,7 +115,7 @@ class PingResponse(BResponse):
         super(PingResponse, self).__init__(t, {"id" : id}, addr)
 
 class FindNodeResponse(BResponse):
-    q = "find_response"
+    q = "find_node"
     def __init__(self, t, id, nodes, addr=None):
         check_str(t, t)
         id = check_id(t, id)
@@ -129,7 +129,7 @@ class GetPeersResponse(BResponse):
     q = "get_peers"
     def __init__(self, t, id, token, values=None, nodes=None, addr=None):
         check_str(t, t)
-        check_str(t, token)
+        #check_str(t, token)
         id = check_id(t, id)
         if nodes is not None:
             if not isinstance(nodes, list):
