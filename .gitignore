@@ -3,3 +3,7 @@ aria2.session
 dht.status
 pyaria2/*
 torrents/*
+torrents_archives/*
+config.py
+crawler.id
+datrie/*
