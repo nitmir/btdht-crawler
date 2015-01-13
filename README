@@ -1,0 +1,4 @@
+dependacies : 
+  * pyaria2
+  * datrie
+  * zmq
