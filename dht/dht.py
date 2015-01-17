@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import pyximport
+pyximport.install()
+from krcp_nogil import BMessage
+
 import sys
 import time
 import Queue
@@ -24,7 +28,6 @@ class DHT(object):
 
         # checking the provided id or picking a random one
         if id is not None:
-            check_id("", id)
             self.myid = ID(id)
         else:
             self.myid = ID()
@@ -39,6 +42,7 @@ class DHT(object):
         self.mytoken={}
         # Map between torrent hash on list of peers
         self._peers=collections.defaultdict(collections.OrderedDict)
+        self._got_peers=collections.defaultdict(collections.OrderedDict)
         self._get_peer_loop_list = []
         self._get_peer_loop_lock = {}
         self._get_closest_loop_lock = {}
@@ -111,12 +115,13 @@ class DHT(object):
         self.last_socket_stats = time.time()
         self.last_msg = time.time()
         self.last_msg_rep = time.time()
-        self.last_msg_list = []
         self.long_clean = time.time()
         self.init_socket()
 
+        self.threads = []
         for f in [self._recv_loop, self._send_loop, self._routine, self._get_peers_closest_loop]:
             t = Thread(target=f)
+            t.setName("%s:%s" % (self.prefix, f.__func__.__name__))
             t.daemon = True
             t.start()
             self._threads.append(t)
@@ -186,8 +191,8 @@ class DHT(object):
                     node.get_peers(self, info_hash)
                     self.debug(1, "No token to announce on node %s" % node)
         if block:
-            while info_hash in self._get_closest_loop_lock:
-                self.sleep(1)
+            while info_hash in self._get_closest_loop_lock and not self.stoped:
+                self.sleep(0.1)
         if not info_hash in self._get_closest_loop_lock:
             self._get_closest_loop_lock[info_hash]=time.time()
             self.debug(2, "get closest hash %s" % info_hash.encode("hex"))
@@ -198,29 +203,38 @@ class DHT(object):
             typ = "closest"
             heapq.heappush(self._get_peer_loop_list, (ts, info_hash, tried_nodes, closest, typ, callback, None))
             if block:
-                while info_hash in self._get_closest_loop_lock:
-                    self.sleep(1)
+                while info_hash in self._get_closest_loop_lock and not self.stoped:
+                    self.sleep(0.1)
 
     def _add_peer(self, info_hash, ip, port):
         """Store a peer after a  announce_peer query"""
         self._peers[info_hash][(ip,port)]=time.time()
-        # we only keep at most 50 peers per hash
-        if len(self._peers[info_hash]) > 50:
+        # we only keep at most 100 peers per hash
+        if len(self._peers[info_hash]) > 100:
             self._peers[info_hash].popitem(False)
 
+    def _add_peer_queried(self, info_hash, ip, port):
+        """Store a peer after a  announce_peer query"""
+        self._got_peers[info_hash][(ip,port)]=time.time()
+        # we only keep at most 1000 peers per hash
+        if len(self._got_peers[info_hash]) > 1000:
+            self._got_peers[info_hash].popitem(False)
+
     def get_peers(self, hash, delay=0, block=True, callback=None, limit=10):
-        """Return a list of at most 50 (ip, port) downloading hash or pass-it to callback"""
+        """Return a list of at most 1000 (ip, port) downloading hash or pass-it to callback"""
         peers = None
-        if hash in self._peers and self._peers[hash] and len(self._peers[hash])>=limit:
+        if hash in self._got_peers and self._got_peers[hash] and len(self._got_peers[hash])>=limit:
             peers = self._get_peers(hash, compact=False)
             if callback:
                 callback(peers)
             return peers
         elif hash in self._get_peer_loop_lock:
             if block:
-                while peers is None and hash in self._get_peer_loop_lock:
+                while hash in self._get_peer_loop_lock and not self.stoped:
                     peers = self._get_peers(hash, compact=False)
-                    self.sleep(1)
+                    if peers:
+                        break
+                    self.sleep(0.1)
             return peers
         else:
             self._get_peer_loop_lock[hash]=time.time()
@@ -232,9 +246,11 @@ class DHT(object):
             typ = "peers"
             heapq.heappush(self._get_peer_loop_list, (ts, hash, tried_nodes, closest, typ, callback, limit))
             if block:
-                while peers is None and hash in self._get_peer_loop_lock:
+                while hash in self._get_peer_loop_lock and not self.stoped:
                     peers = self._get_peers(hash, compact=False)
-                    self.sleep(1)
+                    if peers:
+                        break
+                    self.sleep(0.1)
             return peers
 
     def _get_peers_closest_loop(self):
@@ -273,9 +289,9 @@ class DHT(object):
                         # send a get peer to the closest
                         node.get_peers(self, hash)
                         tried_nodes.add(node)
-                        ts = time.time() + 1
+                        ts = time.time() + 2
                         # we search peers and we found as least limit of them
-                        if (typ == "peers" and limit and hash in self._peers and self._peers[hash] and len(self._peers[hash])>=limit):
+                        if (typ == "peers" and limit and hash in self._got_peers and self._got_peers[hash] and len(self._got_peers[hash])>=limit):
                             self.debug(2, "Hash %s find peers" % hash.encode("hex"))
                             if callback:
                                 callback(self._get_peers(hash, compact=False))
@@ -293,7 +309,7 @@ class DHT(object):
                         del ts
                     else:
                         # we search peers, and we found some
-                        if (typ == "peers" and hash in self._peers and self._peers[hash]):
+                        if (typ == "peers" and hash in self._got_peers and self._got_peers[hash]):
                             self.debug(2, "Hash %s find peers" % hash.encode("hex"))
                             if callback:
                                 callback(self._get_peers(hash, compact=False))
@@ -317,41 +333,48 @@ class DHT(object):
 
     def _get_peers(self, info_hash, compact=True):
         """Return peers store locally by remote announce_peer"""
-        if not info_hash in self._peers:
+        if not info_hash in self._peers and compact:
+            return None
+        elif not info_hash in self._got_peers and not compact:
             return None
         else:
-           peers = [(-t,ip,port) for ((ip, port), t) in self._peers[info_hash].items()]
-           # putting the more recent annonces in first
-           peers.sort()
+           # In compact mode (to send over udp) return at most 70 peers to avoid udp fragmentation
            if compact:
-               return [struct.pack("!4sH", socket.inet_aton(ip), port) for (_, ip, port) in peers[0:50]]
+               peers = [(-t,ip,port) for ((ip, port), t) in self._peers[info_hash].items()]
+               # putting the more recent annonces in first
+               peers.sort()
+               return [struct.pack("!4sH", socket.inet_aton(ip), port) for (_, ip, port) in peers[0:70]]
            else:
-               return [(ip, port) for (_, ip, port) in peers[0:50]]
+               peers = [(-t,ip,port) for ((ip, port), t) in self._got_peers[info_hash].items()]
+               # putting the more recent annonces in first
+               peers.sort()
+               return [(ip, port) for (_, ip, port) in peers]
 
-    def get_closest_nodes(self, id):
-        return list(self.root.get_closest_nodes(id))
+    def get_closest_nodes(self, id, compact=False):
+        l = list(self.root.get_closest_nodes(id))
+        if compact:
+            return "".join(n.compact_info() for n in l)
+        else:
+            return list(self.root.get_closest_nodes(id))
     
     def bootstarp(self):
         self.debug(0,"Bootstraping")
-        find_node1=FindNodeQuery("", self.myid, self.myid)
-        find_node2=FindNodeQuery("", self.myid, self.myid)
-        find_node3=FindNodeQuery("", self.myid, self.myid)
-        _, find_node1 = self._get_transaction_id(FindNodeResponse, find_node1)
-        _, find_node2 = self._get_transaction_id(FindNodeResponse, find_node2)
-        _, find_node3 = self._get_transaction_id(FindNodeResponse, find_node3)
+        find_node1=FindNodeQuery(self, self.myid, self.myid)
+        find_node2=FindNodeQuery(self, self.myid, self.myid)
+        find_node3=FindNodeQuery(self, self.myid, self.myid)
         self.sendto(str(find_node1), ("router.utorrent.com", 6881))
         self.sendto(str(find_node2), ("genua.fr", 6880))
         self.sendto(str(find_node3), ("dht.transmissionbt.com", 6881))
 
 
 
-    def _update_node(self, id, (ip, port), typ):
+    def _update_node(self, id, addr, typ):
         try:
             node = self.root.get_node(id)
-            node.ip = ip
-            node.port = port
+            node.ip = addr[0]
+            node.port = addr[1]
         except NotFound:
-            node = Node(id=id, ip=ip, port=port)
+            node = Node(id=id, ip=addr[0], port=addr[1])
             self.root.add(self, node)
         if typ == "q":
             node.last_query = time.time()
@@ -417,7 +440,6 @@ class DHT(object):
 
                         self.socket_in+=1
                         self.last_msg = time.time()
-                        self.last_msg_list.append(obj)
 
                         # send it
                         self.sendto(str(reponse), addr)
@@ -431,7 +453,6 @@ class DHT(object):
                         self.socket_in+=1
                         self.last_msg = time.time()
                         self.last_msg_rep = time.time()
-                        self.last_msg_list.append(obj)
                     # on error
                     elif obj.y == "e":
                         # process it
@@ -450,7 +471,7 @@ class DHT(object):
                         raise
 
                 
-    def _get_transaction_id(self, reponse_type, query, id_len=4):
+    def _get_transaction_id(self, reponse_type, query, id_len=6):
         id = random(id_len)
         if id in self.transaction_type:
             return self._get_transaction_id(reponse_type, query, id_len=id_len+1)
@@ -513,10 +534,17 @@ class DHT(object):
             # cleaning old peer for announce_peer
             for hash, peers in self._peers.items():
                 for peer in peers.keys():
-                    if now - self._peers[hash][peer] > 15 * 60:
+                    if now - self._peers[hash][peer] > 30 * 60:
                         del self._peers[hash][peer]
                 if not self._peers[hash]:
                     del self._peers[hash]
+
+            for hash, peers in self._got_peers.items():
+                for peer in peers.keys():
+                    if now - self._got_peers[hash][peer] > 15 * 60:
+                        del self._got_peers[hash][peer]
+                if not self._got_peers[hash]:
+                    del self._got_peers[hash]
 
             self.clean_long()
 
@@ -553,9 +581,6 @@ class DHT(object):
                 if goods <= 0:
                     self.bootstarp()
                 self.debug(0 if in_s <= 0 and out_s > 0 and goods < 20 else 1, "%d nodes, %d goods, %d bads | in: %s, out: %s en %ss" % (nodes, goods, bads, in_s, out_s, int(delta)))
-                if in_s <= 0 and out_s > 0 and self.last_msg_list:
-                    self.debug(0, "\n".join("%r" % o for o in self.last_msg_list))
-            self.last_msg_list = []
 
 
 
@@ -590,7 +615,7 @@ class DHT(object):
         for ipport in response.r.get("values", []):
             (ip, port) = struct.unpack("!4sH", ipport)
             ip = socket.inet_ntoa(ip)
-            self._add_peer(query.a["info_hash"], ip=ip, port=port)
+            self._add_peer_queried(query.a["info_hash"], ip=ip, port=port)
     def _on_announce_peer_response(self, query, response):
         pass
 
@@ -615,6 +640,7 @@ class DHT(object):
         getattr(self, 'on_%s_query' % obj.q)(obj)
 
     def _decode(self, s, addr):
+        msg = BMessage(data=d, addr=addr)
         d = bdecode(s)
         if not isinstance(d, dict):
             raise ProtocolError("", "Message send is not a dict")
@@ -623,13 +649,13 @@ class DHT(object):
         try:
             if d["y"] == "q":
                 if d["q"] == "ping":
-                    return PingQuery(d["t"], d["a"]["id"], addr), None
+                    return PingQuery(d["t"], d["a"]["id"], addr, d.get('v', "")), None
                 elif d["q"] == "find_node":
-                    return FindNodeQuery(d["t"], d["a"]["id"], d["a"]["target"], addr), None
+                    return FindNodeQuery(d["t"], d["a"]["id"], d["a"]["target"], addr, d.get('v', "")), None
                 elif d["q"] == "get_peers":
-                    return GetPeersQuery(d["t"], d["a"]["id"], d["a"]["info_hash"], addr), None
+                    return GetPeersQuery(d["t"], d["a"]["id"], d["a"]["info_hash"], addr, d.get('v', "")), None
                 elif d["q"] == "announce_peer":
-                    return AnnouncePeerQuery(d["t"], d["a"]["id"], d["a"]["info_hash"], d["a"]["port"], d["a"]["token"], d["a"].get("implied_port", None), addr), None
+                    return AnnouncePeerQuery(d["t"], d["a"]["id"], d["a"]["info_hash"], d["a"]["port"], d["a"]["token"], d["a"].get("implied_port", None), addr, d.get('v', "")), None
                 else:
                     raise MethodUnknownError(d["t"], "Method %s is unknown" % d["q"])
             elif d["y"] == "r":
@@ -637,18 +663,18 @@ class DHT(object):
                     ttype = self.transaction_type[d["t"]][0]
                     query = self.transaction_type[d["t"]][2]
                     if ttype == PingResponse:
-                        return PingResponse(d["t"], d["r"]["id"], addr), query
+                        return PingResponse(d["t"], d["r"]["id"], addr, d.get('v', "")), query
                     elif ttype == FindNodeResponse:
-                        return FindNodeResponse(d["t"], d["r"]["id"], Node.from_compact_infos(d["r"].get("nodes", "")), addr), query
+                        return FindNodeResponse(d["t"], d["r"]["id"], Node.from_compact_infos(d["r"].get("nodes", ""), d.get('v', "")), addr, d.get('v', "")), query
                     elif ttype == GetPeersResponse:
                         if "values" in d["r"]:
-                            return GetPeersResponse(d["t"], d["r"]["id"], d["r"]["token"], values=d["r"]["values"], addr=addr), query
+                            return GetPeersResponse(d["t"], d["r"]["id"], d["r"]["token"], values=d["r"]["values"], addr=addr, v=d.get('v', "")), query
                         elif "nodes" in d["r"]:
-                            return GetPeersResponse(d["t"], d["r"]["id"], d["r"]["token"], nodes=Node.from_compact_infos(d["r"]["nodes"]), addr=addr), query
+                            return GetPeersResponse(d["t"], d["r"]["id"], d["r"]["token"], nodes=Node.from_compact_infos(d["r"]["nodes"], d.get('v', "")), addr=addr, v=d.get('v', "")), query
                         else:
                             raise ProtocolError(d["t"], "get_peers responses should have a values key or a nodes key")
                     elif ttype == AnnouncePeerResponse:
-                        return AnnouncePeerResponse(d["t"], d["r"]["id"], addr), query
+                        return AnnouncePeerResponse(d["t"], d["r"]["id"], addr, d.get('v', "")), query
                     else:
                         raise MethodUnknownError(d["t"], "Method unknown %s" % ttype.__name__)
                 else:
@@ -703,7 +729,7 @@ class Node(object):
         return struct.pack("!20s4sH", str(self.id), socket.inet_aton(self.ip), self.port)
 
     @classmethod
-    def from_compact_infos(cls, infos):
+    def from_compact_infos(cls, infos, v=""):
         nodes = []
         length = len(infos)
         if length/26*26 != length:
@@ -713,7 +739,7 @@ class Node(object):
             try:
                 nodes.append(Node.from_compact_info(infos[i:i+26]))
             except ValueError as e:
-                print("%s" % e)
+                print("%s %s" % (e, v))
             i += 26
         return nodes
 
@@ -754,28 +780,24 @@ class Node(object):
         return hash(self.id)
 
     def ping(self, dht):
-        msg = PingQuery("", dht.myid)
-        t, msg = dht._get_transaction_id(PingResponse, msg)
+        msg = PingQuery(dht, dht.myid)
         self.failed+=1
         dht.sendto(str(msg), (self.ip, self.port))
 
     def find_node(self, dht, target):
-        msg = FindNodeQuery("", dht.myid, target)
-        t, msg = dht._get_transaction_id(FindNodeResponse, msg)
+        msg = FindNodeQuery(dht, dht.myid, target)
         self.failed+=1
         dht.sendto(str(msg), (self.ip, self.port))
 
     def get_peers(self, dht, info_hash):
-        msg = GetPeersQuery("", dht.myid, info_hash, )
-        t, msg = dht._get_transaction_id(GetPeersResponse, msg)
+        msg = GetPeersQuery(dht, dht.myid, info_hash, )
         self.failed+=1
         dht.sendto(str(msg), (self.ip, self.port))
 
     def announce_peer(self, dht, info_hash, port):
         if self.id in dht.mytoken and (time.time() - dht.mytoken[self.id][1]) < 600:
             token = dht.mytoken[self.id][0]
-            msg = AnnouncePeerQuery("", dht.myid, info_hash, port, token)
-            t, msg = dht._get_transaction_id(AnnouncePeerResponse, msg)
+            msg = AnnouncePeerQuery(dht, dht.myid, info_hash, port, token)
             self.failed+=1
             dht.sendto(str(msg), (self.ip, self.port))
 
@@ -820,7 +842,7 @@ class Bucket(list):
         try:
             char = chr(int(tmp, 2))
         except ValueError:
-            print tmp
+            print(tmp)
             raise
         return ID(self.id[0:id_length/8] + char + id[id_length/8+1:])
 
@@ -949,8 +971,10 @@ class RoutingTable(object):
                 return self._threads_zombie
             self.stoped = False
 
+        self.threads = []
         for f in [self._merge_loop, self._routine, self._split_loop]:
             t = Thread(target=f)
+            t.setName("RT:%s" % f.__func__.__name__)
             t.daemon = True
             t.start()
             self._threads.append(t)
@@ -972,15 +996,15 @@ class RoutingTable(object):
     def release_torrent(self, id):
         try:
             self.info_hash.remove(id)
-            try:
-                to_merge = True
-                key = self.trie.longest_prefix(self._ides(id))
-                self._to_merge.add(key)
-            except KeyError:
-                pass
-            if not self.need_merge:
-                self.debug(1, "Programming merge")
-                self.need_merge = True
+            if not id in self.split_ids:
+                try:
+                    key = self.trie.longest_prefix(self._ides(id))
+                    #self._to_merge.add(key)
+                except KeyError:
+                    pass
+                if not self.need_merge:
+                    self.debug(1, "Programming merge")
+                    self.need_merge = True
         except KeyError:
             pass
 
@@ -1004,6 +1028,16 @@ class RoutingTable(object):
                 next_full_merge = time.time() + 10 * 60
                 self._merge()
 
+    def register_torrent_longterm(self, id):
+        self.split_ids.add(id)
+    def release_torrent_longterm(self, id):
+        try:
+            self.split_ids.remove(id)
+            if not self.need_merge:
+                self.debug(1, "Programming merge")
+                self.need_merge = True
+        except KeyError:
+            pass
     def register_dht(self, dht):
         self._dhts.add(dht)
         self.split_ids.add(dht.myid)
@@ -1018,6 +1052,8 @@ class RoutingTable(object):
                 self.need_merge = True
         except KeyError:
             pass
+        if not self._dhts:
+            self.stop()
 
     def sleep(self, t, fstop=None):
         if t > 0:
@@ -1058,7 +1094,7 @@ class RoutingTable(object):
                 if now - bucket.last_changed > 15 * 60:
                     id = bucket.random_id()
                     nodes = self.get_closest_nodes(id)
-                    if nodes:
+                    if nodes and dhts:
                         nodes[0].find_node(dhts[0], id)
                     del nodes
                 # If questionnable nodes, ping one of them

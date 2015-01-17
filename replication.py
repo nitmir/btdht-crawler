@@ -11,8 +11,6 @@ import select
 import socket
 from threading import Thread
 
-import dht
-
 pub_port = 3333
 priv_port = 3334
 
@@ -44,7 +42,10 @@ class Replicator(object):
 
         self.publisher = {}
 
+        from dht import dht
+
         self.dht = dht.DHT(routing_table=None, bind_port=dht_port)
+        self.dht.root.register_torrent_longterm(self.rep_id)
 
         self.pub_port = pub_port
         self.priv_port = priv_port if priv_port is not None else pub_port
@@ -58,41 +59,99 @@ class Replicator(object):
         self.last_announce = 0
         self.last_clean = time.time()
         self.myip = public_ip
+        self.zombie = False
+        self.stoped = True
 
     def on_torrent_announce(self, hash, url):
-        print "%s: %s" % (hash, url)
+        print("%s: %s" % (hash, url))
 
     def start(self):
+        if not self.stoped:
+            return
+        if self.zombie or self.dht.zombie:
+            print("Zombie thread, unable to start")
+            return
+        self.stoped = False
         self.dht.start()
         self.dht.bootstarp()
-        self.stoped = False
         self.init_subscriber_sock()
         self.init_publisher_sock()
+        self.init_local_sock()
         self.init_sock()
         self._ready = False
         self._failed_peers = {}
+        self.threads = []
         t = Thread(target=self.loop_newclient)
+        t.setName("newclient")
         t.daemon = True
         t.start()
         self.threads.append(t)
         t = Thread(target=self.loop_sub)
+        t.setName("sub")
         t.daemon = True
         t.start()
         self.threads.append(t)
         t = Thread(target=self.loop_announce)
+        t.setName("announce")
         t.daemon = True
         t.start()
         self.threads.append(t)
+        t = Thread(target=self.loop_local)
+        t.setName("local")
+        t.daemon = True
+        t.start()
+        self.threads.append(t)
+        self.threads.append(self.dht)
+
+
+    def stop(self):
+        if self.stoped:
+            return
+        self.stoped = True
+        threads = list(self.threads)
+        threads = [t for t in threads if t.is_alive()]
+        self.dht.stop()
+        for i in range(0, 60):
+            if threads:
+                if i > 3:
+                    print("Waiting for %s threads to terminate" % len(threads))
+                time.sleep(1)
+                threads = [t for t in threads if t.is_alive()]
+            else:
+                break
+        if threads:
+            print("Unable to stop %s threads, giving up" % len(threads))
+            self.zombie = True
+        for (ip, pub_port, priv_port) in self.publisher.keys():
+            try:
+                self.sub_sock.disconnect("tcp://%s:%s" % (ip, pub_port))
+            except zmq.ZMQError:
+                pass
+            del self.publisher[(ip, pub_port, priv_port)]
+
+    def is_alive(self):
+        if self.threads and reduce(lambda x,y: x and y, [t.is_alive() for t in self.threads]):
+            return True
+        elif self.stoped and reduce(lambda x,y: x and y, [not t.is_alive() for t in self.threads]):
+            return False
+        else:
+            self.stop()
+            return False
 
     def get_peers(self):
         known = [(ip, priv_port) for (ip, _, priv_port) in self.publisher]
         known.append((self.myip, self.priv_port))
-        return [ipp for ipp in self.dht.get_peers(self.rep_id, limit=50) if not ipp in known and not ipp in self._failed_peers]
+        peers = self.dht.get_peers(self.rep_id, limit=1000)
+        if peers:
+            return [ipp for ipp in peers if not ipp in known and not ipp in self._failed_peers]
+        else:
+            return []
 
     def announce(self):
         self.dht.announce_peer(self.rep_id, self.priv_port)
 
     def loop_announce(self):
+        time.sleep(1)
         started = time.time()
         # trying to bootstrap for 2 min
         while not self._ready and time.time() - started < 2 * 60:
@@ -104,7 +163,7 @@ class Replicator(object):
                     return
 
         if not self._ready:
-            print "Unable to bootstrap, trying again"
+            print("Unable to bootstrap, trying again")
         # trying again until no valid peer found
         while not self._ready and self.get_peers():
             self.bootstrap()
@@ -114,7 +173,7 @@ class Replicator(object):
                     return
 
         if not self._ready:
-            print "Unable to bootstrap, must be first in the swarm"
+            print("Unable to bootstrap, must be first in the swarm")
 
         for i in range(15):
             self.announce()
@@ -124,16 +183,12 @@ class Replicator(object):
             if self.stoped:
                 return
             if time.time() >= next_bootstrap:
-                next_bootstrap = time.time() + 60
+                next_bootstrap = time.time() + 60 * 5
                 self.bootstrap()
             if time.time() >= next_announce:
                 next_announce = time.time() + 60 * 5
                 self.announce()
             time.sleep(1)
-
-    def stop(self):
-        self.stoped = True
-        self.dht.stop()
 
     def init_subscriber_sock(self):
         context = zmq.Context()
@@ -144,7 +199,7 @@ class Replicator(object):
 
     def add_publisher(self, ip, pub_port, priv_port):
         if not (ip, pub_port, priv_port) in self.publisher:
-            print (ip, pub_port, priv_port)
+            print((ip, pub_port, priv_port))
             addr = "tcp://%s:%s" % (ip, pub_port)
             self.sub_sock.connect(addr)
             self.pub_sock.send(json.dumps({"q":"add_publisher", "addr":[ip, pub_port, priv_port]}))
@@ -164,7 +219,23 @@ class Replicator(object):
                 if now - self._failed_peers[peer] > 15 * 60:
                     del self._failed_peers[peer]
             self.last_clean = now
+
+
+    @staticmethod
+    def send_torrent(urlhash):
+        context = zmq.Context()
+        sock = context.socket(zmq.REQ)
+        sock.connect("ipc:///tmp/replication")
+        msg = json.dumps(urlhash)
+        if not isinstance(msg, bytes):
+            msg = msg.encode()
+        sock.send(msg)
         
+    def init_local_sock(self):
+        context = zmq.Context()
+        self.local_sock = context.socket(zmq.REP)
+        self.local_sock.bind("ipc:///tmp/replication")
+
     def init_publisher_sock(self):
         context = zmq.Context()
         self.pub_sock = context.socket(zmq.PUB)
@@ -219,13 +290,15 @@ class Replicator(object):
                     self._ready = True
                     return True
                 else:
-                    print data
+                    print(data)
         except ValueError as e:
             sock.send(str(e))
             print("%r" % e)
         return False
 
+
     def loop_newclient(self):
+        time.sleep(1)
         while True:
             if self.stoped:
                 sys.exit(0)
@@ -235,16 +308,16 @@ class Replicator(object):
                 try:
                     if data[0] == "b":
                         _, port_bootstrap, port_pub = struct.unpack("!1sHH", data)
-                        print "b: %s,%s" % (port_bootstrap, port_pub)
+                        print("b: %s,%s" % (port_bootstrap, port_pub))
                         test_port(port_bootstrap)
                         test_port(port_pub)
                         self.sock.sendto(struct.pack("!1sH", "d", self.pub_port), addr)
                         self.add_publisher(addr[0], port_pub, addr[1])
-                        print "Send swarm to %s:%s" % (addr[0], port_bootstrap)
+                        print("Send swarm to %s:%s" % (addr[0], port_bootstrap))
                         self.send_swarm(addr[0], port_bootstrap)
                     elif data[0] == "d":
                         _, port_pub = struct.unpack("!1sH", data)
-                        print "d: %s" % port_pub
+                        print("d: %s" % port_pub)
                         test_port(port_pub)
                         self.add_publisher(addr[0], port_pub, addr[1])
                 except (ValueError, struct.error) as e:
@@ -254,7 +327,26 @@ class Replicator(object):
         """Announce the torrent of hash hash available a url to the swarm"""
         self.pub_sock.send(json.dumps({"q":"torrent", "hash":hash.lower(), "url":url}))
 
+    def loop_local(self):
+        time.sleep(1)
+        poller = zmq.Poller()
+        poller.register(self.local_sock, zmq.POLLIN)
+        while True:
+            if self.stoped:
+                return
+            sockets = dict(poller.poll(1000))
+            if sockets and sockets[self.local_sock] == zmq.POLLIN:
+                try:
+                    data = json.loads(self.local_sock.recv())
+                    for (hash, url) in data:
+                        self.announce_torrent(hash, url)
+                    self.local_sock.send("ok")
+                except ValueError as e:
+                    print("%r" % e)
+
+
     def loop_sub(self):
+        time.sleep(1)
         poller = zmq.Poller()
         poller.register(self.sub_sock, zmq.POLLIN)
         while True:

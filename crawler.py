@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import os
+import sys
 import time
+import psutil
 import MySQLdb
 from threading import Thread
 from dht import DHT, ID, RoutingTable
@@ -155,29 +157,41 @@ class Crawler(DHT):
                 self.root.good_info_hash[hash]=time.time()
             else:
                 self.root.bad_info_hash[hash]=time.time()
-        self.get_peers(hash, delay=15, block=False, callback=callback)
+        self.get_peers(hash, delay=15, block=False, callback=callback, limit=1)
 
 
 
 
-def get_id():
+def get_id(id_file):
     try:
-        return ID(open("crawler.id").read(20))
+        return ID(open(id_file).read(20))
     except IOError:
-        print "generating new id"
+        print("generating new id")
         id = ID()
-        with open("crawler.id", "w+") as f:
-            f.write(id)
+        with open(id_file, "w+") as f:
+            f.write(str(id))
         return id
 
-def lauch(debug):
+def lauch(debug, id_file="crawler.id"):
     global stoped
     resource.setrlimit(resource.RLIMIT_AS, (config.crawler_max_memory, -1)) #limit to one kilobyt
-    id_base = get_id()
+    id_base = get_id(id_file)
+
+    pidfile = "%s.pid" % id_file
+    try:
+        pid = int(open(pidfile).read().strip())
+        psutil.Process(pid)
+        print("pid %s is alive" % pid)
+        return
+    except (psutil.NoSuchProcess, IOError):
+        pass
+    pid = os.getpid()
+    open(pidfile, 'w').write(str(pid))
+
     port_base = config.crawler_base_port
     prefix=1
     routing_table = RoutingTable(debuglvl=debug)
-    dht_base = Crawler(bind_port=port_base, id=id_base, debuglvl=debug, prefix="%s:" % prefix, master=True, routing_table=routing_table)
+    dht_base = Crawler(bind_port=port_base + ord(id_base[0]), id=id_base, debuglvl=debug, prefix="%s:" % prefix, master=True, routing_table=routing_table)
     liveness = [routing_table, dht_base]
     for id in enumerate_ids(config.crawler_instance, id_base):
         if id == id_base:
@@ -199,6 +213,7 @@ def lauch(debug):
                 if not liv.is_alive():
                     if liv.zombie:
                         raise Exception("Stoped Zombie")
+                    raise Exception("Stoped")
                     print("thread stoped, restarting")
                     liv.start()
             time.sleep(10)
@@ -224,4 +239,7 @@ def stop(liveness):
 
 if __name__ == '__main__':
     debug = 0
-    lauch(debug)
+    if sys.argv[1:]:
+        lauch(debug, sys.argv[1])
+    else:
+        lauch(debug)

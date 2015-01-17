@@ -5,5 +5,6 @@ pyaria2/*
 torrents/*
 torrents_archives/*
 config.py
-crawler.id
+*.id
+*.pid
 datrie/*
