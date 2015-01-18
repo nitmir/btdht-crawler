@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 import pyximport
 pyximport.install()
-from krcp_nogil import BMessage
 
+import IN
 import sys
 import time
 import Queue
@@ -22,7 +22,8 @@ from utils import *
 from krcp import *
 
 
-
+from krcp_nogil import BMessage
+from krcp_nogil import BError as BErrorNG
 class DHT(object):
     def __init__(self, routing_table=None, bind_port=None, bind_ip="0.0.0.0", id=None, ignored_ip=[], debuglvl=0, prefix="", master=False):
 
@@ -160,6 +161,7 @@ class DHT(object):
         self._to_send = Queue.Queue()
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         #self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.sock.setsockopt(socket.IPPROTO_IP, IN.IP_MTU_DISCOVER, IN.IP_PMTUDISC_DO)
         self.sock.setblocking(0)
         if self.bind_port:
             self.sock.bind((self.bind_ip, self.bind_port))
@@ -368,21 +370,22 @@ class DHT(object):
 
 
 
-    def _update_node(self, id, addr, typ):
-        try:
-            node = self.root.get_node(id)
-            node.ip = addr[0]
-            node.port = addr[1]
-        except NotFound:
-            node = Node(id=id, ip=addr[0], port=addr[1])
-            self.root.add(self, node)
-        if typ == "q":
-            node.last_query = time.time()
-        elif typ == "r":
-            node.last_response = time.time()
-            node.failed = 0
-        else:
-            raise ValueError("typ should be r or q")
+    def _update_node(self, obj):
+        if obj.y == "q" or obj.y == "r":
+            id = obj.get("id")
+            if id:
+                try:
+                    node = self.root.get_node(id)
+                    node.ip = obj.addr[0]
+                    node.port = obj.addr[1]
+                except NotFound:
+                    node = Node(id=id, ip=obj.addr[0], port=obj.addr[1])
+                    self.root.add(self, node)
+                if obj.y == "q":
+                    node.last_query = time.time()
+                elif obj.y == "r":
+                    node.last_response = time.time()
+                    node.failed = 0
 
     def _send_loop(self):
         while True:
@@ -427,12 +430,18 @@ class DHT(object):
                     if addr[1] < 1 or addr[1] > 65535:
                         self.debug(0, "Port should be whithin 1 and 65535, not %s" % addr[1])
                         continue
+                    if len(data) < 20:
+                        continue
                     # Building python object from bencoded data
                     obj, obj_opt = self._decode(data, addr)
+                    # Update sender node in routing table
+                    try:
+                        self._update_node(obj)
+                    except TypeError:
+                        print "TypeError: %r in _recv_loop" % obj
+                        raise
                     # On query
                     if obj.y == "q":
-                        # Update sender node in routing table
-                        self._update_node(obj["id"], addr, "q")
                         # process the query
                         self._process_query(obj)
                         # build the response object
@@ -445,8 +454,6 @@ class DHT(object):
                         self.sendto(str(reponse), addr)
                     # on response
                     elif obj.y == "r":
-                        # Update sender node in routing table
-                        self._update_node(obj["id"], addr, "r")
                         # process the response
                         self._process_response(obj, obj_opt)
 
@@ -459,7 +466,7 @@ class DHT(object):
                         self.on_error(obj, obj_opt)
 
                 # if we raised a BError, send it
-                except BError as error:
+                except (BError, BErrorNG) as error:
                     self.sendto(str(error), addr)
                 # if unable to bdecode, malformed packet"
                 except BcodeError:
@@ -605,17 +612,23 @@ class DHT(object):
     def _on_ping_response(self, query, response):
         pass
     def _on_find_node_response(self, query, response):
-        for node in response.r.get("nodes", []):
-            self.root.add(self, node)
-        self.debug(2, "%s nodes added to routing table" % len(response.r.get("nodes", [])))
+        for node in Node.from_compact_infos(response.get("nodes", "")):
+            try:
+                self.root.add(self, node)
+            except AttributeError:
+                print "AttributeError: %r in _on_find_node_response" % node
+                raise
+        self.debug(2, "%s nodes added to routing table" % len(response.get("nodes", [])))
     def _on_get_peers_response(self, query, response):
-        self.mytoken[response["id"]]=(response["token"], time.time())
-        for node in response.r.get("nodes", []):
+        token = response.get("token")
+        if token:
+            self.mytoken[response["id"]]=(token, time.time())
+        for node in Node.from_compact_infos(response.get("nodes", "")):
             self.root.add(self, node)
-        for ipport in response.r.get("values", []):
+        for ipport in response.get("values", []):
             (ip, port) = struct.unpack("!4sH", ipport)
             ip = socket.inet_ntoa(ip)
-            self._add_peer_queried(query.a["info_hash"], ip=ip, port=port)
+            self._add_peer_queried(query["info_hash"], ip=ip, port=port)
     def _on_announce_peer_response(self, query, response):
         pass
 
@@ -626,79 +639,60 @@ class DHT(object):
     def _on_get_peers_query(self, query):
         pass
     def _on_announce_peer_query(self, query):
-        if query.a.get("implied_port", 0) != 0:
-            self._add_peer(info_hash=query.a["info_hash"], ip=query.addr[0], port=query.addr[1])
+        if query.get("implied_port", 0) != 0:
+            self._add_peer(info_hash=query["info_hash"], ip=query.addr[0], port=query.addr[1])
         else:
-            self._add_peer(info_hash=query.a["info_hash"], ip=query.addr[0], port=query.a["port"])
+            self._add_peer(info_hash=query["info_hash"], ip=query.addr[0], port=query["port"])
 
 
     def _process_response(self, obj, query):
-        getattr(self, '_on_%s_response' % obj.q)(query, obj)
-        getattr(self, 'on_%s_response' % obj.q)(query, obj)
+        if query.q in ["find_node", "ping", "get_peers", "announce_peer"]:
+            getattr(self, '_on_%s_response' % query.q)(query, obj)
+            getattr(self, 'on_%s_response' % query.q)(query, obj)
     def _process_query(self, obj):
-        getattr(self, '_on_%s_query' % obj.q)(obj)
-        getattr(self, 'on_%s_query' % obj.q)(obj)
+        if obj.q in ["find_node", "ping", "get_peers", "announce_peer"]:
+            getattr(self, '_on_%s_query' % obj.q)(obj)
+            getattr(self, 'on_%s_query' % obj.q)(obj)
 
     def _decode(self, s, addr):
-        msg = BMessage(data=d, addr=addr)
-        d = bdecode(s)
-        if not isinstance(d, dict):
-            raise ProtocolError("", "Message send is not a dict")
-        if not "t" in d:
-            raise ProtocolError("", "Message malformed: t key is mandatory")
+        msg = BMessage(addr=addr)
+        msg.decode(s, len(s))
         try:
-            if d["y"] == "q":
-                if d["q"] == "ping":
-                    return PingQuery(d["t"], d["a"]["id"], addr, d.get('v', "")), None
-                elif d["q"] == "find_node":
-                    return FindNodeQuery(d["t"], d["a"]["id"], d["a"]["target"], addr, d.get('v', "")), None
-                elif d["q"] == "get_peers":
-                    return GetPeersQuery(d["t"], d["a"]["id"], d["a"]["info_hash"], addr, d.get('v', "")), None
-                elif d["q"] == "announce_peer":
-                    return AnnouncePeerQuery(d["t"], d["a"]["id"], d["a"]["info_hash"], d["a"]["port"], d["a"]["token"], d["a"].get("implied_port", None), addr, d.get('v', "")), None
+            if msg.y == "q":
+                return msg, None
+            elif msg.y == "r":
+                if msg.t in self.transaction_type:
+                    ttype = self.transaction_type[msg.t][0]
+                    query = self.transaction_type[msg.t][2]
+                    return msg, query
                 else:
-                    raise MethodUnknownError(d["t"], "Method %s is unknown" % d["q"])
-            elif d["y"] == "r":
-                if d["t"] in self.transaction_type:
-                    ttype = self.transaction_type[d["t"]][0]
-                    query = self.transaction_type[d["t"]][2]
-                    if ttype == PingResponse:
-                        return PingResponse(d["t"], d["r"]["id"], addr, d.get('v', "")), query
-                    elif ttype == FindNodeResponse:
-                        return FindNodeResponse(d["t"], d["r"]["id"], Node.from_compact_infos(d["r"].get("nodes", ""), d.get('v', "")), addr, d.get('v', "")), query
-                    elif ttype == GetPeersResponse:
-                        if "values" in d["r"]:
-                            return GetPeersResponse(d["t"], d["r"]["id"], d["r"]["token"], values=d["r"]["values"], addr=addr, v=d.get('v', "")), query
-                        elif "nodes" in d["r"]:
-                            return GetPeersResponse(d["t"], d["r"]["id"], d["r"]["token"], nodes=Node.from_compact_infos(d["r"]["nodes"], d.get('v', "")), addr=addr, v=d.get('v', "")), query
-                        else:
-                            raise ProtocolError(d["t"], "get_peers responses should have a values key or a nodes key")
-                    elif ttype == AnnouncePeerResponse:
-                        return AnnouncePeerResponse(d["t"], d["r"]["id"], addr, d.get('v', "")), query
-                    else:
-                        raise MethodUnknownError(d["t"], "Method unknown %s" % ttype.__name__)
+                    raise GenericError(msg.t, "transaction id unknown")
+            elif msg.y == "e":
+                query = self.transaction_type.get(msg.t, (None, None, None))[2]
+                if msg.errno == 201:
+                    self.debug(2, "ERROR:201:%s pour %r" % (msg.errmsg, self.transaction_type.get(msg.t, {})))
+                    return GenericError(msg.t, msg.errmsg), query
+                elif msg.errno == 202:
+                    self.debug(2, "ERROR:202:%s pour %r" % (msg.errmsg, self.transaction_type.get(msg.t, {})))
+                    return ServerError(msg.t, msg.errmsg), query
+                elif msg.errno == 203:
+                    t = self.transaction_type.get(msg.t)
+                    self.debug(0 if t else 1, "ERROR:203:%s pour %r" % (msg.errmsg, t))
+                    return ProtocolError(msg.t, msg.errmsg), query
+                elif msg.errno == 204:
+                    t = self.transaction_type.get(msg.t)
+                    self.debug(0 if t else 1, "ERROR:204:%s pour %r" % (msg.errmsg, t))
+                    return MethodUnknownError(msg.t, msg.errmsg), query
                 else:
-                    raise GenericError(d["t"], "transaction id unknown")
-            elif d["y"] == "e":
-                self.debug(2, "ERROR:%r pour %r" % (d, self.transaction_type.get(d["t"], {})))
-                query = self.transaction_type.get(d["t"], (None, None, None))[2]
-                if d["e"][0] == 201:
-                    return GenericError(d["t"], d["e"][1]), query
-                elif d["e"][0] == 202:
-                    return ServerError(d["t"], d["e"][1]), query
-                elif d["e"][0] == 203:
-                    return ProtocolError(d["t"], d["e"][1]), query
-                elif d["e"][0] == 204:
-                    return MethodUnknownError(d["t"], d["e"][1]), query
-                else:
-                    raise MethodUnknownError(d["t"], "Error code %s unknown" % d["e"][0])
+                    self.debug(3, "ERROR:%s:%s pour %r" % (msg.errno, msg.errmsg, self.transaction_type.get(msg.t, {})))
+                    raise MethodUnknownError(msg.t, "Error code %s unknown" % msg.errno)
             else:
-                self.debug(0, "UNKNOWN MSG: %r" % d)
-                raise ProtocolError(d["t"])
+                self.debug(0, "UNKNOWN MSG: %r" % msg)
+                raise ProtocolError(msg.t)
         except KeyError as e:
-            raise ProtocolError(d["t"], "Message malformed: %s key is missing" % e.message)
+            raise ProtocolError(msg.t, "Message malformed: %s key is missing" % e.message)
         except IndexError:
-            raise ProtocolError(d["t"], "Message malformed")
+            raise ProtocolError(msg.t, "Message malformed")
 
 
 
@@ -713,7 +707,7 @@ class Node(object):
     __slot__ = ("id", "ip", "port", "last_response", "last_query", "failed")
     def __init__(self, id, ip, port, last_response=0, last_query=0, failed=0):
         if not port > 0 and port < 65536:
-            raise ValueError("Invalid port number %s, sould be within 1 and 65535" % port)
+            raise ValueError("Invalid port number %s, sould be within 1 and 65535 for %s" % (port, ip))
         self.id = id
         self.ip = ip
         self.port = port
@@ -733,13 +727,14 @@ class Node(object):
         nodes = []
         length = len(infos)
         if length/26*26 != length:
-            raise ProtocolError(d["t"], "nodes length should be a multiple of 26")
+            raise ProtocolError("", "nodes length should be a multiple of 26")
         i=0
         while i < length:
-            try:
-                nodes.append(Node.from_compact_info(infos[i:i+26]))
-            except ValueError as e:
-                print("%s %s" % (e, v))
+            if infos[i+20:i+24] != '\0\0\0\0' and infos[i+24:i+26] != '\0\0':
+                #try:
+                    nodes.append(Node.from_compact_info(infos[i:i+26]))
+                #except ValueError as e:
+                #    print("%s %s" % (e, v))
             i += 26
         return nodes
 
