@@ -27,7 +27,7 @@ from cython.parallel import prange
 import utils
 
 cdef int str_to_int(char* data, int len) nogil:
-    cdef char* msg
+    cdef char* msg = NULL
     cdef int i
     try:
         msg = <char *>malloc((len+1) * sizeof(char))
@@ -35,7 +35,8 @@ cdef int str_to_int(char* data, int len) nogil:
         msg[len]='\0'
         i = atoi(msg)
     finally:
-        free(msg)
+        if msg != NULL:
+            free(msg)
     return i
 
 cdef int int_length(int i) nogil:
@@ -85,10 +86,10 @@ cdef bint _decode_string(char* data, int* i, int max, int* j) nogil:
                 return True
             else:
                 with gil:
-                     raise ValueError("%s > %s : %s" % (i[0], max, data))
+                     raise ValueError("%s > %s : %r" % (i[0], max, data))
         else:
             with gil:
-                raise ValueError("%s != : at %s %s" % (data[j[0]], j[0], data))
+                raise ValueError("%s != : at %s %r" % (data[j[0]], j[0], data))
     else:
         return False
 
@@ -185,6 +186,10 @@ cdef class BMessage:
     cdef int v_len
     cdef bint r
     cdef bint a
+    cdef bint e
+    cdef int _errno
+    cdef char* _errmsg
+    cdef int errmsg_len
     cdef char* id
     cdef bint has_id
     cdef char* target
@@ -211,27 +216,19 @@ cdef class BMessage:
     cdef char* addr_addr
     cdef int addr_port
 
-    cdef bint set_y(self, char* value, int size) nogil:
+    cdef bint set_r(self, bint value) nogil:
         self.encoded_uptodate = False
-        if self.has_y:
-            free(self._y)
-        else:
-            self.has_y = True
-        self._y = <char*>malloc(size * sizeof(char))
-        self.y_len = size
-        strncpy(self._y, value, size)
+        self.r = value
         return True
 
-    cdef bint set_id(self, char* value, int size) nogil:
+    cdef bint set_a(self, bint value) nogil:
         self.encoded_uptodate = False
-        if size != 20:
-            return False
-        if self.has_id:
-            free(self.id)
-        else:
-            self.has_id = True
-        self.id = <char*>malloc(size * sizeof(char))
-        strncpy(self.id, value, size)
+        self.a = value
+        return True
+
+    cdef bint set_e(self, bint value) nogil:
+        self.encoded_uptodate = False
+        self.e = value
         return True
 
     cdef bint set_t(self, char* value, int size) nogil:
@@ -245,10 +242,156 @@ cdef class BMessage:
         strncpy(self._t, value, size)
         return True
 
-    cdef bint set_r(self, bint value) nogil:
+    cdef void del_t(self) nogil:
+        if self.has_t:
+            self.encoded_uptodate = False
+            self.has_t = False
+            self.t_len = 0
+            free(self._t)
+
+    cdef bint set_v(self, char* value, int size) nogil:
         self.encoded_uptodate = False
-        self.r = value
+        if self.has_v:
+            free(self._v)
+        else:
+            self.has_v = True
+        self._v = <char*>malloc(size * sizeof(char))
+        self.v_len = size
+        strncpy(self._v, value, size)
         return True
+
+    cdef void del_v(self) nogil:
+        if self.has_v:
+            self.encoded_uptodate = False
+            self.has_v = False
+            self.v_len = 0
+            free(self._v)
+
+    cdef bint set_y(self, char* value, int size) nogil:
+        self.encoded_uptodate = False
+        if self.has_y:
+            free(self._y)
+        else:
+            self.has_y = True
+        self._y = <char*>malloc(size * sizeof(char))
+        self.y_len = size
+        strncpy(self._y, value, size)
+        return True
+
+    cdef void del_y(self) nogil:
+        if self.has_y:
+            self.encoded_uptodate = False
+            self.has_y = False
+            self.y_len = 0
+            free(self._y)
+
+    cdef bint set_q(self, char* value, int size) nogil:
+        self.encoded_uptodate = False
+        if self.has_q:
+            free(self._q)
+        else:
+            self.has_q = True
+        self._q = <char*>malloc(size * sizeof(char))
+        self.q_len = size
+        strncpy(self._q, value, size)
+        return True
+
+    cdef void del_q(self) nogil:
+        if self.has_q:
+            self.encoded_uptodate = False
+            self.has_q = False
+            self.q_len = 0
+            free(self._q)
+
+    cdef bint set_id(self, char* value, int size) nogil:
+        if size != 20:
+            return False
+        self.encoded_uptodate = False
+        if self.has_id:
+            free(self.id)
+        else:
+            self.has_id = True
+        self.id = <char*>malloc(size * sizeof(char))
+        strncpy(self.id, value, size)
+        return True
+
+    cdef void del_id(self) nogil:
+        if self.has_id:
+            self.encoded_uptodate = False
+            self.has_id = False
+            free(self.id)
+
+    cdef bint set_target(self, char* value, int size) nogil:
+        if size != 20:
+            return False
+        self.encoded_uptodate = False
+        if self.has_target:
+            free(self.target)
+        else:
+            self.has_target = True
+        self.target = <char*>malloc(size * sizeof(char))
+        strncpy(self.target, value, size)
+        return True
+
+    cdef void del_target(self) nogil:
+        if self.has_target:
+            self.has_target = False
+            self.encoded_uptodate = False
+            free(self.target)
+
+    cdef bint set_info_hash(self, char* value, int size) nogil:
+        if size != 20:
+            return False
+        self.encoded_uptodate = False
+        if self.has_info_hash:
+            free(self.info_hash)
+        else:
+            self.has_info_hash = True
+        self.info_hash = <char*>malloc(size * sizeof(char))
+        strncpy(self.info_hash, value, size)
+        return True
+
+    cdef void del_info_hash(self) nogil:
+        if self.has_info_hash:
+            self.has_info_hash = False
+            self.encoded_uptodate = False
+            free(self.info_hash)
+
+    cdef void del_implied_port(self) nogil:
+        self.has_implied_port = False
+        self.encoded_uptodate = False
+
+    cdef bint set_implied_port(self, int value) nogil:
+        self.encoded_uptodate = False
+        self.implied_port = value
+        self.has_implied_port = True
+
+    cdef bint set_port(self, int value) nogil:
+        self.encoded_uptodate = False
+        self.port = value
+        self.has_port = True
+
+    cdef void del_port(self) nogil:
+        self.has_port = False
+        self.encoded_uptodate = False
+
+    cdef bint set_token(self, char* value, int size) nogil:
+        self.encoded_uptodate = False
+        if self.has_token:
+            free(self.token)
+        else:
+            self.has_token = True
+        self.token_len = size
+        self.token = <char*>malloc(size * sizeof(char))
+        strncpy(self.token, value, size)
+        return True
+
+    cdef void del_token(self) nogil:
+        if self.has_token:
+            self.has_token = False
+            self.encoded_uptodate = False
+            self.token_len = 0
+            free(self.token)
 
     cdef bint set_nodes(self, char* value, int size) nogil:
         self.encoded_uptodate = False
@@ -261,7 +404,14 @@ cdef class BMessage:
         strncpy(self.nodes, value, size)
         return True
 
-    cdef bint set_values(self, char** values) nogil:
+    cdef bint del_nodes(self) nogil:
+        if self.has_nodes:
+            self.has_nodes = False
+            self.encoded_uptodate = False
+            self.nodes_len = 0
+            free(self.nodes)
+
+    cdef bint set_values(self, char** values, int nb) nogil:
         cdef int i
         self.encoded_uptodate = False
         if self.has_values:
@@ -270,18 +420,44 @@ cdef class BMessage:
             free(self.values)
         else:
             self.has_values = True
+        self.values_nb = nb
         self.values = values
 
-    cdef bint set_token(self, char* value, int size) nogil:
+    cdef void del_values(self) nogil:
+        cdef int i = 0
+        if self.has_values:
+            self.has_values = False
+            self.encoded_uptodate = False
+            for i in prange(self.values_nb):
+                free(self.values[i])
+            self.values_nb = 0
+            free(self.values)
+
+    cdef bint set_errmsg(self, char* value, int size) nogil:
         self.encoded_uptodate = False
-        if self.has_token:
-            free(self.token)
-        else:
-            self.has_token = True
-        self.token_len = size
-        self.token = <char*>malloc(size * sizeof(char))
-        strncpy(self.token, value, size)
+        if self.errmsg_len > 0:
+            free(self._errmsg)
+        self.errmsg_len = size
+        self._errmsg = <char*>malloc(size * sizeof(char))
+        strncpy(self._errmsg, value, size)
         return True
+
+    cdef void del_errmsg(self) nogil:
+        if self.errmsg_len > 0:
+            self.errmsg_len = 0
+            self.encoded_uptodate = False
+            free(self._errmsg)
+
+    cdef bint set_errno(self, int value) nogil:
+        self.encoded_uptodate = False
+        self._errno = value
+        return True
+
+    cdef void del_encoded(self) nogil:
+        if self.encoded_len > 0:
+            self.encoded_len = 0
+            self.encoded_uptodate = False
+            free(self.encoded)
 
     def response(self, dht):
         cdef BMessage rep = BMessage()
@@ -338,10 +514,10 @@ cdef class BMessage:
                             else:
                                 s = dht.get_closest_nodes(self.target[:20], compact=True)
                                 nodes = s
-                                l2 = len(nodes)
+                            l2 = len(s)
                         rep.set_token(token, l1)
                         if values != NULL:
-                            rep.set_values(values)
+                            rep.set_values(values, l2)
                         else:
                             rep.set_nodes(nodes, l2)
                         self._encode()
@@ -358,7 +534,7 @@ cdef class BMessage:
                             with gil:
                                 raise ProtocolError(self.t, "token missing")
                         with gil:
-                            s = dht._get_token(self.addr[0])
+                            s = dht._get_valid_token(self.addr[0])
                             if not self["token"] in s:
                                 raise ProtocolError(self.t, "bad token")
                         rep.set_y("r", 1)
@@ -367,7 +543,7 @@ cdef class BMessage:
                         rep.set_id(id, 20)
                         self._encode()
                         with gil:
-                            return
+                            return rep
                     else:
                         with gil:
                             raise MethodUnknownError(self.t, "Method %s Unknown" % self.q)
@@ -470,6 +646,23 @@ cdef class BMessage:
         i[0]+=1
         return True
 
+    cdef bint _encode_error(self, char* data, int* i, int max) nogil:
+        if i[0] + 2 > max:
+            printf("encode_error: %d", 0)
+            return False
+        data[i[0]] = 'l'
+        i[0]+=1
+        if not _encode_int(data, i, max, self._errno):
+            return False
+        if not _encode_string(data, i, max, self._errmsg, self.errmsg_len):
+            return False
+        if i[0] >= max:
+            printf("encode_error: %d", 1)
+            return False
+        data[i[0]] = 'e'
+        i[0]+=1
+        return True
+
     cdef bint _encode_main_dict(self, char* data, int* i, int max) nogil:
         if i[0] + 1 > max:
             printf("encode_main: %d\n", 0)
@@ -483,6 +676,14 @@ cdef class BMessage:
             strncpy(data + i[0], "1:a", 3)
             i[0]+=3
             if not self._encode_secondary_dict(data, i, max):
+                return False
+        if self.e:
+            if i[0] + 3 > max:
+                printf("encode_main: %d\n", 8)
+                return False
+            strncpy(data + i[0], "1:e", 3)
+            i[0]+=3
+            if not self._encode_error(data, i, max):
                 return False
         if self.has_q:
             if i[0] + 3 > max:
@@ -518,7 +719,7 @@ cdef class BMessage:
                 return False
         if self.has_y:
             if i[0] + 3 > max:
-                printf("encode_main: %d\n", 6)
+                printf("encode_main: %d %d\n", 6, i[0])
                 return False
             strncpy(data + i[0], "1:y", 3)
             i[0]+=3
@@ -534,15 +735,18 @@ cdef class BMessage:
 
     cdef bint _encode(self) nogil:
         cdef int i=0
+        if self.encoded_len > 0:
+            free(self.encoded)
         self.encoded_len = self._encode_len()
         #printf("free%d\n", 0)
-        free(self.encoded)
         #printf("free%d\n", 1)
         self.encoded = <char *> malloc(self.encoded_len * sizeof(char))
         if self._encode_main_dict(self.encoded, &i, self.encoded_len):
             self.encoded_uptodate = True
             return True
         else:
+            free(self.encoded)
+            self.encoded_len = 0
             self.encoded_uptodate = False
             return False
 
@@ -556,24 +760,27 @@ cdef class BMessage:
             estimated_len+=int_length(self.q_len) + 1 + self.q_len + 3
         if self.has_v:
             estimated_len+=int_length(self.v_len) + 1 + self.v_len + 3
-        if self.r or self.a: # only one can be True
+        if self.r or self.a or self.e: # only one can be True
             estimated_len+=2 + 3 # the d and e of the a ou r dict
-        if self.has_id:
-            estimated_len+=23 + 4
-        if self.has_target:
-            estimated_len+=23 + 8
-        if self.has_info_hash:
-            estimated_len+=23 + 11
-        if self.has_implied_port:
-            estimated_len+=int_length(self.implied_port) + 1 + 2 + 15# i + int + e
-        if self.has_port:
-            estimated_len+=int_length(self.port) + 1 + 2 + 6
-        if self.has_nodes:
-            estimated_len+=int_length(self.nodes_len) + 1 + 1 + self.nodes_len + 7
-        if self.has_token:
-            estimated_len+=int_length(self.token_len) + 1 + 1 + self.token_len + 7
-        if self.has_values:
-            estimated_len+= 8 * self.values_nb + 2 + 8 # l + nb * IPPORT + e
+        if self.e:
+            estimated_len+=int_length(self._errno) + 2 + self.errmsg_len + 1 + int_length(self.errmsg_len)
+        if self.r or self.a:
+            if self.has_id:
+                estimated_len+=23 + 4
+            if self.has_target:
+                estimated_len+=23 + 8
+            if self.has_info_hash:
+                estimated_len+=23 + 11
+            if self.has_implied_port:
+                estimated_len+=int_length(self.implied_port) + 2 + 15# i + int + e
+            if self.has_port:
+                estimated_len+=int_length(self.port) + 2 + 6
+            if self.has_nodes:
+                estimated_len+=int_length(self.nodes_len) + 1 + self.nodes_len + 7
+            if self.has_token:
+                estimated_len+=int_length(self.token_len) + 1 + self.token_len + 7
+            if self.has_values:
+                estimated_len+= 8 * self.values_nb + 2 + 8 # l + nb * IPPORT + e
         #printf("estimated_len: %d\n" , estimated_len)
         return estimated_len
         
@@ -585,6 +792,26 @@ cdef class BMessage:
 
     def __str__(self):
         return self.encode()
+
+    property errno:
+        def __get__(self):
+            if self.e:
+                return self._errno
+            else:
+                return None
+        def __set__(self, int value):
+            self.set_errno(value)
+
+    property errmsg:
+        def __get__(self):
+            if self.e:
+                return self._errmsg[:self.errmsg_len]
+            else:
+                return None
+        def __set__(self, char* msg):
+            l = len(msg)
+            with nogil:
+                self.set_errmsg(msg, l)
 
     property addr:
         def __get__(self):
@@ -603,15 +830,9 @@ cdef class BMessage:
             else:
                 return None
         def __set__(self,char* value):
-            self.y_len = len(value)
+            l = len(value)
             with nogil:
-                self.encoded_uptodate = False
-                if self.has_y:
-                    free(self._y)
-                else:
-                    self.has_y = True
-                self._y = <char *>malloc(self.y_len * sizeof(char))
-                strncpy(self._y, value, self.y_len)
+                self.set_y(value, l)
 
     property t:
         def __get__(self):
@@ -620,15 +841,9 @@ cdef class BMessage:
             else:
                 return None
         def __set__(self,char* value):
-            self.t_len = len(value)
+            l = len(value)
             with nogil:
-                self.encoded_uptodate = False
-                if self.has_t:
-                    free(self._t)
-                else:
-                    self.has_t = True
-                self._t = <char *>malloc(self.t_len * sizeof(char))
-                strncpy(self._t, value, self.t_len)
+                self.set_t(value, l)
     property q:
         def __get__(self):
             if self.has_q:
@@ -636,15 +851,9 @@ cdef class BMessage:
             else:
                 return None
         def __set__(self,char* value):
-            self.q_len = len(value)
+            l = len(value)
             with nogil:
-                self.encoded_uptodate = False
-                if self.has_q:
-                    free(self._q)
-                else:
-                    self.has_q = True
-                self._q = <char *>malloc(self.q_len * sizeof(char))
-                strncpy(self._q, value, self.q_len)
+                self.set_q(value, l)
     property v:
         def __get__(self):
             if self.has_v:
@@ -652,15 +861,9 @@ cdef class BMessage:
             else:
                 return None
         def __set__(self,char* value):
-            self.v_len = len(value)
+            l = len(value)
             with nogil:
-                self.encoded_uptodate = False
-                if self.has_v:
-                    free(self._v)
-                else:
-                    self.has_v = True
-                self._v = <char *>malloc(self.v_len * sizeof(char))
-                strncpy(self._v, value, self.v_len)
+                self.set_v(value, l)
 
     def __getitem__(self, char* key):
         cdef char* msg
@@ -704,25 +907,14 @@ cdef class BMessage:
                     if len(value) != 20:
                         raise ValueError("Can only set strings of length 20B")
                     j = value
-                if self.has_target:
-                    free(self.target)
-                else:
-                    self.has_target = True
-                self.target = <char *>malloc(20 * sizeof(char))
-                strncpy(self.target, j, 20)
+                self.set_target(j, 20)
                 return
             elif strcmp(key, "info_hash") == 0:
                 with gil:
                     if len(value) != 20:
                         raise ValueError("Can only set strings of length 20B")
                     j = value
-                self.encoded_uptodate = False
-                if self.has_info_hash:
-                    free(self.info_hash)
-                else:
-                    self.has_info_hash = True
-                self.info_hash = <char *>malloc(20 * sizeof(char))
-                strncpy(self.info_hash, j, 20)
+                self.set_info_hash(j, 20)
                 return
             elif strcmp(key, "token") == 0:
                 with gil:
@@ -739,22 +931,18 @@ cdef class BMessage:
             elif strcmp(key, "implied_port") == 0:
                 with gil:
                     i = value
-                self.encoded_uptodate = False
-                self.implied_port = i
-                self.has_implied_port = True
+                self.set_implied_port(i)
                 return
             elif strcmp(key, "port") == 0:
                 with gil:
                     i = value
-                self.encoded_uptodate = False
-                self.port = i
-                self.has_port = True
+                self.set_port(i)
                 return
             elif strcmp(key, "values") == 0:
                 with gil:
                     v = vlist_to_array(value)
-                    self.values_nb = len(value)
-                self.set_values(v)
+                    i = len(value)
+                self.set_values(v, i)
                 return
         raise KeyError(key)
 
@@ -780,9 +968,29 @@ cdef class BMessage:
             for i in prange(self.values_nb):
                 free(self.values[i])
             free(self.values)
+            free(self._errmsg)
 
+    cdef bint _decode_error(self, char* data, int* i, int max) nogil:
+        cdef int j[1]
+        if i[0] > max:
+            with gil:
+                raise ValueError("%s > %s : %r" % (i[0], max, data))
+        if data[i[0]] != 'l':
+            return False
+        i[0]+=1
+        if not _decode_int(data, i, max, j):
+            return False
+        self.set_errno(j[0])
+        if not _decode_string(data, i, max, j):
+            return False
+        self.set_errmsg(data + j[0], i[0]-j[0])
+        if data[i[0]] != 'e':
+            return False
+        i[0]+=1
+        return True
         
     cdef bint _decode_dict_elm(self, char* data, int* i, int max) nogil:
+        cdef char* error
         cdef int j[1]
         j[0]=0
         if not _decode_string(data, i, max, j):
@@ -800,95 +1008,64 @@ cdef class BMessage:
                 return True
             else:
                 return False
+        elif strncmp(data + j[0], "e", i[0]-j[0]) == 0:
+            if self._decode_error(data, i, max):
+                self.e = True
+                return True
+            else:
+                return False
         elif strncmp(data + j[0], "t", i[0]-j[0]) == 0:
-            if _decode_string(data, i, max, j):
-                self.t_len = i[0]-j[0]
-                self._t = <char *>malloc(self.t_len * sizeof(char))
-                self.has_t = True
-                strncpy(self._t, data + j[0], i[0]-j[0])
+            if _decode_string(data, i, max, j) and self.set_t(data + j[0], i[0]-j[0]):
                 return True
             else:
                 return False
         elif strncmp(data + j[0], "v", i[0]-j[0]) == 0:
-            if _decode_string(data, i, max, j):
-                self.v_len = i[0]-j[0]
-                self._v = <char *>malloc(self.v_len * sizeof(char))
-                self.has_v = True
-                strncpy(self._v, data + j[0], i[0]-j[0])
+            if _decode_string(data, i, max, j) and self.set_v(data + j[0], i[0]-j[0]):
                 return True
             else:
                 return False
         elif strncmp(data + j[0], "y", i[0]-j[0]) == 0:
-            if _decode_string(data, i, max, j):
-                self.y_len = i[0]-j[0]
-                self._y = <char *>malloc(self.y_len * sizeof(char))
-                self.has_y = True
-                strncpy(self._y, data + j[0], i[0]-j[0])
+            if _decode_string(data, i, max, j) and self.set_y(data + j[0], i[0]-j[0]):
                 return True
             else:
                 return False
         elif strncmp(data + j[0], "q", i[0]-j[0]) == 0:
-            if _decode_string(data, i, max, j):
-                self.q_len = i[0]-j[0]
-                self._q = <char *>malloc(self.q_len * sizeof(char))
-                self.has_q = True
-                strncpy(self._q, data + j[0], i[0]-j[0])
+            if _decode_string(data, i, max, j) and self.set_q(data + j[0], i[0]-j[0]):
                 return True
             else:
                 return False
         elif strncmp(data + j[0], "id", i[0]-j[0]) == 0:
-            if _decode_string(data, i, max, j) and (i[0]-j[0]) == 20:
-                self.id = <char *>malloc(20 * sizeof(char))
-                self.has_id = True
-                strncpy(self.id, data + j[0], i[0]-j[0])
+            if _decode_string(data, i, max, j) and self.set_id(data + j[0], i[0]-j[0]):
                 return True
             else:
                 return False
         elif strncmp(data + j[0], "target", i[0]-j[0]) == 0:
-            if _decode_string(data, i, max, j) and (i[0]-j[0]) == 20:
-                self.target = <char *>malloc(20 * sizeof(char))
-                self.has_target = True
-                strncpy(self.target, data + j[0], i[0]-j[0])
+            if _decode_string(data, i, max, j) and self.set_target(data + j[0], i[0]-j[0]):
                 return True
             else:
                 return False
         elif strncmp(data + j[0], "info_hash", i[0]-j[0]) == 0:
-            if _decode_string(data, i, max, j) and (i[0]-j[0]) == 20:
-                self.info_hash = <char *>malloc(20 * sizeof(char))
-                self.has_info_hash = True
-                strncpy(self.info_hash, data + j[0], i[0]-j[0])
+            if _decode_string(data, i, max, j) and self.set_info_hash(data + j[0], i[0]-j[0]):
                 return True
             else:
                 return False
         elif strncmp(data + j[0], "implied_port", i[0]-j[0]) == 0:
-            if _decode_int(data, i, max, j):
-                self.implied_port = j[0]
-                self.has_implied_port = True
+            if _decode_int(data, i, max, j) and self.set_implied_port(j[0]):
                 return True
             else:
                 return False
         elif strncmp(data + j[0], "port", i[0]-j[0]) == 0:
-            if _decode_int(data, i, max, j):
-                self.port = j[0]
-                self.has_port = True
+            if _decode_int(data, i, max, j) and self.set_port(j[0]):
                 return True
             else:
                 return False
         elif strncmp(data + j[0], "token", i[0]-j[0]) == 0:
-            if _decode_string(data, i, max, j):
-                self.token_len = i[0]-j[0]
-                self.token = <char *>malloc(self.token_len * sizeof(char))
-                self.has_token = True
-                strncpy(self.token, data + j[0], i[0]-j[0])
+            if _decode_string(data, i, max, j) and self.set_token(data + j[0], i[0]-j[0]):
                 return True
             else:
                 return False
         elif strncmp(data + j[0], "nodes", i[0]-j[0]) == 0:
-            if _decode_string(data, i, max, j):
-                self.nodes_len = i[0]-j[0]
-                self.nodes = <char *>malloc(self.nodes_len * sizeof(char))
-                self.has_nodes = True
-                strncpy(self.nodes, data + j[0], i[0]-j[0])
+            if _decode_string(data, i, max, j) and self.set_nodes(data + j[0], i[0]-j[0]):
                 return True
             else:
                 return False
@@ -898,15 +1075,49 @@ cdef class BMessage:
             else:
                 return False
         else:
-            printf("error %s %d\n", data + j[0], i[0]-j[0])
+            if self.debug:
+                error = <char*>malloc((i[0] + 1 - j[0]) * sizeof(char))
+                error[i[0]-j[0]]='\0'
+                strncpy(error, data + j[0], i[0] - j[0])
+                printf("error %s\n", error)
+                free(error)
+            if _decode_string(data, i, max, j):
+                return True
+            if _decode_int(data, i, max, j):
+                return True
+            if self._decode_pass_list(data, i, max):
+                return True
+            if self._decode_dict(data, i, max):
+                return True
 
+        return False
 
+    cdef bint _decode_pass_list(self, char* data, int *i, int max) nogil:
+        cdef int j[0]
+        if i[0] >= max + 1:
+            with gil:
+                raise ValueError("%s > %s : %r" % (i[0], max, data))
+            return False
+        if data[i[0]] != "l":
+            return False
+        i[0]+=1
+        while data[i[0]] != 'e' and i[0] < max:
+            _decode_string(data, i, max, j) or _decode_int(data, i, max, j) or self._decode_pass_list(data, i, max) or self._decode_dict(data, i, max)
+        if i[0] >= max:
+            with gil:
+                raise ValueError("%s > %s : %r" % (i[0], max, data))
+            return False
+        if data[i[0]] != 'e':
+            return False
         return True
-
     cdef bint _decode_values(self, char* data, int *i, int max) nogil:
         cdef int j[1]
         cdef int c = 0
         cdef int k = i[0] + 1
+        cdef char** values
+        if i[0] >= max:
+            with gil:
+                raise ValueError("%s > %s : %r" % (i[0], max, data))
         if not data[i[0]] == 'l':
             return False
         i[0]+=1
@@ -922,15 +1133,14 @@ cdef class BMessage:
                 with gil:
                     raise ValueError("End of values list not found %s >= %s found %s elements" % (i[0], max, c))
             return False
-        self.values_nb = c
-        self.values = <char **>malloc(self.values_nb * sizeof(char*))
         i[0] = k
+        values = <char **>malloc(c * sizeof(char*))
         c=0
         while _decode_string(data, i, max, j):
-           self.values[c] = <char *>malloc( 6 * sizeof(char))
-           strncpy(self.values[c], data + j[0], 6)
+           values[c] = <char *>malloc( 6 * sizeof(char))
+           strncpy(values[c], data + j[0], 6)
            c+=1
-        self.has_values = True
+        self.set_values(values, c)
         i[0]+=1
         return True
             
@@ -940,13 +1150,12 @@ cdef class BMessage:
             while data[i[0]] != 'e' and i[0] < max:
                 if self._decode_dict_elm(data, i, max):
                     pass
-                    #i[0]+=1
                 else:
                     break
         if data[i[0]] != 'e':
             if self.debug:
                 with gil:
-                    raise ValueError("End of dict not found %s %s" % (i[0], data))
+                    raise ValueError("End of dict not found %s>=%d %s" % (i[0], max, data))
             return False
         else:
             i[0]+=1
@@ -955,16 +1164,18 @@ cdef class BMessage:
     cdef bint _decode(self, char* data, int *i, int max) nogil:
         return self._decode_dict(data, i, max)
 
-    def  __init__(self, data="", addr=None):
+    def  __init__(self, addr=None, debug=False):
         self.addr = addr
 
-    def __cinit__(self, char* data="", addr=None):
-        cdef int i = 0
-        cdef bint valid = False
+    def __cinit__(self, addr=None, debug=False):
+        self.debug = True if debug else False
         with nogil:
             self.values_nb = 0
+            self.errmsg_len = 0
+            self.encoded_len = 0
             self.r = False
             self.a = False
+            self.e = False
             self.has_y = False
             self.has_t = False
             self.has_q = False
@@ -976,10 +1187,13 @@ cdef class BMessage:
             self.has_nodes = False
             self.has_values = False
             self.encoded_uptodate = False
-            self.debug = False
             
-            if data[0] != "\0":
-                valid = self._decode(data, &i, strlen(data))
+    def decode(self, char* data, int datalen):
+        cdef int i = 0
+        cdef bint valid = False
+        with nogil:
+            if datalen > 0:
+                valid = self._decode(data, &i, datalen)
                 if valid:
                     self.encoded_len = self._encode_len()
                     self.encoded = <char *> malloc(self.encoded_len * sizeof(char))
@@ -987,8 +1201,10 @@ cdef class BMessage:
                     self.encoded_uptodate = True
                 if not valid or not self.has_t or not self.has_y:
                     with gil:
+                        if self.debug:
+                            print("%r" % data)
                         if self.has_t:
                             raise ProtocolError(self._t[:self.t_len])
                         else:
                             raise ProtocolError("")
-            
+        return data[i:]
