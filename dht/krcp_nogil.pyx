@@ -63,9 +63,52 @@ cdef char** vlist_to_array(l, int size=6):
     return data
 
 
+cdef int _decode_pass_list(char* data, int *i, int max) nogil except -1:
+    cdef int j[0]
+    if i[0] >= max + 1:
+        with gil:
+            raise ValueError("%s > %s : %r" % (i[0], max, data[:max]))
+        return False
+    if data[i[0]] != "l":
+        return False
+    i[0]+=1
+    while data[i[0]] != 'e' and i[0] < max:
+        if not _decode_string(data, i, max, j) and not  _decode_int(data, i, max, j) and not _decode_pass_list(data, i, max) and not _decode_pass_dict(data, i, max):
+            with gil:
+                raise ValueError("Unable to parse one of the element of the list %d %r" % (i[0], data[:max]))
+    if i[0] >= max:
+        with gil:
+            raise ValueError("list_pass: %s > %s : %r" % (i[0], max, data[:max]))
+        return False
+    if data[i[0]] != 'e':
+        return False
+    i[0]+=1
+    return True
 
-cdef bint _decode_string(char* data, int* i, int max, int* j) nogil:
-    cdef bint ret
+cdef int _decode_pass_dict(char* data, int *i, int max) nogil except -1:
+    cdef int j[0]
+    if i[0] >= max + 1:
+        with gil:
+            raise ValueError("%s > %s : %r" % (i[0], max, data[:max]))
+        return False
+    if data[i[0]] != "d":
+        return False
+    i[0]+=1
+    while data[i[0]] != 'e' and i[0] < max:
+        if not _decode_string(data, i, max, j) or (not _decode_string(data, i, max, j) and not _decode_int(data, i, max, j) and not _decode_pass_list(data, i, max) and not _decode_pass_dict(data, i, max)):
+            with gil:
+                raise ValueError("Unable to parse one of the element of the dict %d %r" % (i[0], data[:max]))
+    if i[0] >= max:
+        with gil:
+            raise ValueError("dict_pass: %s > %s : %r" % (i[0], max, data[:max]))
+        return False
+    if data[i[0]] != 'e':
+        return False
+    i[0]+=1
+    return True
+    
+cdef int _decode_string(char* data, int* i, int max, int* j) nogil except -1:
+    cdef int ret
     if data[i[0]] == '0' \
     or data[i[0]] == '2' \
     or data[i[0]] == '3' \
@@ -86,14 +129,14 @@ cdef bint _decode_string(char* data, int* i, int max, int* j) nogil:
                 return True
             else:
                 with gil:
-                     raise ValueError("%s > %s : %r" % (i[0], max, data))
+                     raise ValueError("%s > %s : %r" % (i[0], max, data[:max]))
         else:
             with gil:
-                raise ValueError("%s != : at %s %r" % (data[j[0]], j[0], data))
+                raise ValueError("%s != : at %s %r" % (data[j[0]], j[0], data[:max]))
     else:
         return False
 
-cdef bint _decode_int(char* data, int *i, int max, int *myint) nogil:
+cdef int _decode_int(char* data, int *i, int max, int *myint) nogil:
     cdef int j
     if data[i[0]] == 'i':
         i[0]+=1
@@ -112,7 +155,7 @@ cdef bint _decode_int(char* data, int *i, int max, int *myint) nogil:
     else:
         return False
                 
-cdef bint _encode_int(char* data, int *i, int max, int j) nogil:
+cdef int _encode_int(char* data, int *i, int max, int j) nogil:
     cdef int l
     l = int_length(j)
     if max >= i[0] + l + 2:
@@ -127,7 +170,7 @@ cdef bint _encode_int(char* data, int *i, int max, int j) nogil:
         printf("encode_int: %d < %d\n", max, i[0] + l + 2)
         return False
 
-cdef bint _encode_string(char* data, int* i, int max, char* str, int strlen) nogil:
+cdef int _encode_string(char* data, int* i, int max, char* str, int strlen) nogil:
     cdef int l
     l = int_length(strlen)
     if max >= i[0] + l + 1 + strlen: # size as char + : + string
@@ -155,7 +198,7 @@ class BError(Exception):
     def __str__(self):
         return utils.bencode({"y":self.y, "t":self.t, "e":self.e})
     def __repr__(self):
-        return "%s: %s" % self.e
+        return "%s: %s" % (self.__class__.__name__, self.e)
 
 class GenericError(BError):
     def __init__(self, t, msg=""):
@@ -172,66 +215,22 @@ class MethodUnknownError(BError):
 
 
 cdef class BMessage:
-    cdef char* _y
-    cdef bint has_y
-    cdef int y_len
-    cdef char* _t
-    cdef bint has_t
-    cdef int t_len
-    cdef char* _q
-    cdef bint has_q
-    cdef int q_len
-    cdef char* _v
-    cdef bint has_v
-    cdef int v_len
-    cdef bint r
-    cdef bint a
-    cdef bint e
-    cdef int _errno
-    cdef char* _errmsg
-    cdef int errmsg_len
-    cdef char* id
-    cdef bint has_id
-    cdef char* target
-    cdef bint has_target
-    cdef char* info_hash
-    cdef bint has_info_hash
-    cdef int implied_port
-    cdef bint has_implied_port
-    cdef int port
-    cdef bint has_port
-    cdef char* token
-    cdef bint has_token
-    cdef int token_len
-    cdef char* nodes
-    cdef bint has_nodes
-    cdef int nodes_len
-    cdef char** values
-    cdef int values_nb
-    cdef bint has_values
-    cdef char* encoded
-    cdef int encoded_len
-    cdef bint encoded_uptodate
-    cdef bint debug
-    cdef char* addr_addr
-    cdef int addr_port
-
-    cdef bint set_r(self, bint value) nogil:
+    cdef int set_r(self, int value) nogil:
         self.encoded_uptodate = False
         self.r = value
         return True
 
-    cdef bint set_a(self, bint value) nogil:
+    cdef int set_a(self, int value) nogil:
         self.encoded_uptodate = False
         self.a = value
         return True
 
-    cdef bint set_e(self, bint value) nogil:
+    cdef int set_e(self, int value) nogil:
         self.encoded_uptodate = False
         self.e = value
         return True
 
-    cdef bint set_t(self, char* value, int size) nogil:
+    cdef int set_t(self, char* value, int size) nogil:
         self.encoded_uptodate = False
         if self.has_t:
             free(self._t)
@@ -249,7 +248,7 @@ cdef class BMessage:
             self.t_len = 0
             free(self._t)
 
-    cdef bint set_v(self, char* value, int size) nogil:
+    cdef int set_v(self, char* value, int size) nogil:
         self.encoded_uptodate = False
         if self.has_v:
             free(self._v)
@@ -267,7 +266,7 @@ cdef class BMessage:
             self.v_len = 0
             free(self._v)
 
-    cdef bint set_y(self, char* value, int size) nogil:
+    cdef int set_y(self, char* value, int size) nogil:
         self.encoded_uptodate = False
         if self.has_y:
             free(self._y)
@@ -285,7 +284,7 @@ cdef class BMessage:
             self.y_len = 0
             free(self._y)
 
-    cdef bint set_q(self, char* value, int size) nogil:
+    cdef int set_q(self, char* value, int size) nogil:
         self.encoded_uptodate = False
         if self.has_q:
             free(self._q)
@@ -303,7 +302,7 @@ cdef class BMessage:
             self.q_len = 0
             free(self._q)
 
-    cdef bint set_id(self, char* value, int size) nogil:
+    cdef int set_id(self, char* value, int size) nogil:
         if size != 20:
             return False
         self.encoded_uptodate = False
@@ -321,7 +320,7 @@ cdef class BMessage:
             self.has_id = False
             free(self.id)
 
-    cdef bint set_target(self, char* value, int size) nogil:
+    cdef int set_target(self, char* value, int size) nogil:
         if size != 20:
             return False
         self.encoded_uptodate = False
@@ -339,7 +338,7 @@ cdef class BMessage:
             self.encoded_uptodate = False
             free(self.target)
 
-    cdef bint set_info_hash(self, char* value, int size) nogil:
+    cdef int set_info_hash(self, char* value, int size) nogil:
         if size != 20:
             return False
         self.encoded_uptodate = False
@@ -361,21 +360,23 @@ cdef class BMessage:
         self.has_implied_port = False
         self.encoded_uptodate = False
 
-    cdef bint set_implied_port(self, int value) nogil:
+    cdef int set_implied_port(self, int value) nogil:
         self.encoded_uptodate = False
         self.implied_port = value
         self.has_implied_port = True
+        return True
 
-    cdef bint set_port(self, int value) nogil:
+    cdef int set_port(self, int value) nogil:
         self.encoded_uptodate = False
         self.port = value
         self.has_port = True
+        return True
 
     cdef void del_port(self) nogil:
         self.has_port = False
         self.encoded_uptodate = False
 
-    cdef bint set_token(self, char* value, int size) nogil:
+    cdef int set_token(self, char* value, int size) nogil:
         self.encoded_uptodate = False
         if self.has_token:
             free(self.token)
@@ -393,7 +394,7 @@ cdef class BMessage:
             self.token_len = 0
             free(self.token)
 
-    cdef bint set_nodes(self, char* value, int size) nogil:
+    cdef int set_nodes(self, char* value, int size) nogil:
         self.encoded_uptodate = False
         if self.has_nodes:
             free(self.nodes)
@@ -404,14 +405,14 @@ cdef class BMessage:
         strncpy(self.nodes, value, size)
         return True
 
-    cdef bint del_nodes(self) nogil:
+    cdef int del_nodes(self) nogil:
         if self.has_nodes:
             self.has_nodes = False
             self.encoded_uptodate = False
             self.nodes_len = 0
             free(self.nodes)
 
-    cdef bint set_values(self, char** values, int nb) nogil:
+    cdef int set_values(self, char** values, int nb) nogil:
         cdef int i
         self.encoded_uptodate = False
         if self.has_values:
@@ -422,6 +423,7 @@ cdef class BMessage:
             self.has_values = True
         self.values_nb = nb
         self.values = values
+        return True
 
     cdef void del_values(self) nogil:
         cdef int i = 0
@@ -433,7 +435,7 @@ cdef class BMessage:
             self.values_nb = 0
             free(self.values)
 
-    cdef bint set_errmsg(self, char* value, int size) nogil:
+    cdef int set_errmsg(self, char* value, int size) nogil:
         self.encoded_uptodate = False
         if self.errmsg_len > 0:
             free(self._errmsg)
@@ -448,7 +450,7 @@ cdef class BMessage:
             self.encoded_uptodate = False
             free(self._errmsg)
 
-    cdef bint set_errno(self, int value) nogil:
+    cdef int set_errno(self, int value) nogil:
         self.encoded_uptodate = False
         self._errno = value
         return True
@@ -552,7 +554,7 @@ cdef class BMessage:
             else:
                 printf("not query %d\n", 1)
 
-    cdef bint _encode_values(self, char* data, int* i, int max) nogil:
+    cdef int _encode_values(self, char* data, int* i, int max) nogil:
         cdef int j
         if i[0] + self.values_nb * 8 + 2 > max:
             printf("encode_values: %d < %d\n", max, i[0] + self.values_nb * 8 + 2)
@@ -569,7 +571,7 @@ cdef class BMessage:
         i[0]+=1
         return True
         
-    cdef bint _encode_secondary_dict(self, char* data, int* i, int max) nogil:
+    cdef int _encode_secondary_dict(self, char* data, int* i, int max) nogil:
         if i[0] + 1 > max:
             printf("encode_secondary:%d\n", 0)
             return False
@@ -646,7 +648,7 @@ cdef class BMessage:
         i[0]+=1
         return True
 
-    cdef bint _encode_error(self, char* data, int* i, int max) nogil:
+    cdef int _encode_error(self, char* data, int* i, int max) nogil:
         if i[0] + 2 > max:
             printf("encode_error: %d", 0)
             return False
@@ -663,7 +665,7 @@ cdef class BMessage:
         i[0]+=1
         return True
 
-    cdef bint _encode_main_dict(self, char* data, int* i, int max) nogil:
+    cdef int _encode_main_dict(self, char* data, int* i, int max) nogil:
         if i[0] + 1 > max:
             printf("encode_main: %d\n", 0)
             return False
@@ -733,7 +735,7 @@ cdef class BMessage:
         return True
 
 
-    cdef bint _encode(self) nogil:
+    cdef int _encode(self) nogil:
         cdef int i=0
         if self.encoded_len > 0:
             free(self.encoded)
@@ -823,6 +825,10 @@ cdef class BMessage:
             if addr is not None:
                 self.addr_addr = addr[0]
                 self.addr_port = addr[1]
+        def __del__(self):
+            self.addr_addr = None
+            self.addr_port = None
+
     property y:
         def __get__(self):
             if self.has_y:
@@ -833,6 +839,9 @@ cdef class BMessage:
             l = len(value)
             with nogil:
                 self.set_y(value, l)
+        def __del__(self):
+            with nogil:
+                self.del_y()
 
     property t:
         def __get__(self):
@@ -844,6 +853,10 @@ cdef class BMessage:
             l = len(value)
             with nogil:
                 self.set_t(value, l)
+        def __del__(self):
+            with nogil:
+                self.del_t()
+
     property q:
         def __get__(self):
             if self.has_q:
@@ -854,6 +867,10 @@ cdef class BMessage:
             l = len(value)
             with nogil:
                 self.set_q(value, l)
+        def __del__(self):
+            with nogil:
+                self.del_q()
+
     property v:
         def __get__(self):
             if self.has_v:
@@ -865,10 +882,11 @@ cdef class BMessage:
             with nogil:
                 self.set_v(value, l)
 
+        def __del__(self):
+            with nogil:
+                self.del_v()
+
     def __getitem__(self, char* key):
-        cdef char* msg
-        cdef int i
-        cdef int typ=-1
         if key == b"id" and self.has_id:
             return self.id[:20]
         elif key == b"target" and self.has_target:
@@ -887,6 +905,28 @@ cdef class BMessage:
             return varray_to_list(self.values, self.values_nb)
         else:
             raise KeyError(key)
+
+    def __delitem__(self, char* key):
+        with nogil:
+            if self.has_id and strcmp(key, "id") == 0:
+                self.del_id()
+            elif self.has_target and strcmp(key, "target") == 0:
+                self.del_target()
+            elif self.has_info_hash and strcmp(key, "info_hash") == 0:
+                self.del_info_hash()
+            elif self.has_token and strcmp(key, "token") == 0:
+                self.del_token()
+            elif self.has_nodes and strcmp(key, "nodes") == 0:
+                self.del_nodes()
+            elif self.has_implied_port and strcmp(key, "implied_port") == 0:
+                self.del_implied_port()
+            elif self.has_port and strcmp(key, "port") == 0:
+                self.del_port()
+            elif self.has_values and strcmp(key, "values") == 0:
+                self.del_values()
+            else:
+                with gil:
+                    raise KeyError(key)
 
     def __setitem__(self, char* key, value):
         cdef int i = 0
@@ -970,11 +1010,11 @@ cdef class BMessage:
             free(self.values)
             free(self._errmsg)
 
-    cdef bint _decode_error(self, char* data, int* i, int max) nogil:
+    cdef int _decode_error(self, char* data, int* i, int max) nogil except -1:
         cdef int j[1]
         if i[0] > max:
             with gil:
-                raise ValueError("%s > %s : %r" % (i[0], max, data))
+                raise ValueError("%s > %s : %r" % (i[0], max, data[:max]))
         if data[i[0]] != 'l':
             return False
         i[0]+=1
@@ -989,150 +1029,86 @@ cdef class BMessage:
         i[0]+=1
         return True
         
-    cdef bint _decode_dict_elm(self, char* data, int* i, int max) nogil:
+    cdef int _decode_dict_elm(self, char* data, int* i, int max) nogil except -1:
         cdef char* error
         cdef int j[1]
         j[0]=0
         if not _decode_string(data, i, max, j):
-            return False
+            with gil:
+                raise ValueError("Fail to decode dict key %d %s" % (i[0], data[:max]))
         
-        if strncmp(data + j[0], "a", i[0]-j[0]) == 0:
-            if self._decode_dict(data, i, max):
-                self.a = True
-                return True
-            else:
-                return False
-        elif strncmp(data + j[0], "r", i[0]-j[0]) == 0:
-            if self._decode_dict(data, i, max):
-                self.r = True
-                return True
-            else:
-                return False
-        elif strncmp(data + j[0], "e", i[0]-j[0]) == 0:
-            if self._decode_error(data, i, max):
-                self.e = True
-                return True
-            else:
-                return False
-        elif strncmp(data + j[0], "t", i[0]-j[0]) == 0:
-            if _decode_string(data, i, max, j) and self.set_t(data + j[0], i[0]-j[0]):
-                return True
-            else:
-                return False
-        elif strncmp(data + j[0], "v", i[0]-j[0]) == 0:
-            if _decode_string(data, i, max, j) and self.set_v(data + j[0], i[0]-j[0]):
-                return True
-            else:
-                return False
-        elif strncmp(data + j[0], "y", i[0]-j[0]) == 0:
-            if _decode_string(data, i, max, j) and self.set_y(data + j[0], i[0]-j[0]):
-                return True
-            else:
-                return False
-        elif strncmp(data + j[0], "q", i[0]-j[0]) == 0:
-            if _decode_string(data, i, max, j) and self.set_q(data + j[0], i[0]-j[0]):
-                return True
-            else:
-                return False
-        elif strncmp(data + j[0], "id", i[0]-j[0]) == 0:
-            if _decode_string(data, i, max, j) and self.set_id(data + j[0], i[0]-j[0]):
-                return True
-            else:
-                return False
-        elif strncmp(data + j[0], "target", i[0]-j[0]) == 0:
-            if _decode_string(data, i, max, j) and self.set_target(data + j[0], i[0]-j[0]):
-                return True
-            else:
-                return False
-        elif strncmp(data + j[0], "info_hash", i[0]-j[0]) == 0:
-            if _decode_string(data, i, max, j) and self.set_info_hash(data + j[0], i[0]-j[0]):
-                return True
-            else:
-                return False
-        elif strncmp(data + j[0], "implied_port", i[0]-j[0]) == 0:
-            if _decode_int(data, i, max, j) and self.set_implied_port(j[0]):
-                return True
-            else:
-                return False
-        elif strncmp(data + j[0], "port", i[0]-j[0]) == 0:
-            if _decode_int(data, i, max, j) and self.set_port(j[0]):
-                return True
-            else:
-                return False
-        elif strncmp(data + j[0], "token", i[0]-j[0]) == 0:
-            if _decode_string(data, i, max, j) and self.set_token(data + j[0], i[0]-j[0]):
-                return True
-            else:
-                return False
-        elif strncmp(data + j[0], "nodes", i[0]-j[0]) == 0:
-            if _decode_string(data, i, max, j) and self.set_nodes(data + j[0], i[0]-j[0]):
-                return True
-            else:
-                return False
-        elif strncmp(data + j[0], "values", i[0]-j[0]) == 0:
+        if (i[0]-j[0]) == 1 and strncmp(data + j[0], "a", i[0]-j[0]) == 0:
+            return self._decode_dict(data, i, max) and self.set_a(True)
+        elif (i[0]-j[0]) == 1 and strncmp(data + j[0], "r", i[0]-j[0]) == 0:
+            return self._decode_dict(data, i, max) and self.set_r(True)
+        elif (i[0]-j[0]) == 1 and strncmp(data + j[0], "e", i[0]-j[0]) == 0:
+            return self._decode_error(data, i, max) and self.set_e(True)
+        elif (i[0]-j[0]) == 1 and strncmp(data + j[0], "t", i[0]-j[0]) == 0:
+            return _decode_string(data, i, max, j) and self.set_t(data + j[0], i[0]-j[0])
+        elif (i[0]-j[0]) == 1 and strncmp(data + j[0], "v", i[0]-j[0]) == 0:
+            return _decode_string(data, i, max, j) and self.set_v(data + j[0], i[0]-j[0])
+        elif (i[0]-j[0]) == 1 and strncmp(data + j[0], "y", i[0]-j[0]) == 0:
+            return _decode_string(data, i, max, j) and self.set_y(data + j[0], i[0]-j[0])
+        elif (i[0]-j[0]) == 1 and strncmp(data + j[0], "q", i[0]-j[0]) == 0:
+            return _decode_string(data, i, max, j) and self.set_q(data + j[0], i[0]-j[0])
+        elif (i[0]-j[0]) == 2 and strncmp(data + j[0], "id", i[0]-j[0]) == 0:
+            return _decode_string(data, i, max, j) and self.set_id(data + j[0], i[0]-j[0])
+        elif (i[0]-j[0]) == 6 and strncmp(data + j[0], "target", i[0]-j[0]) == 0:
+            return _decode_string(data, i, max, j) and self.set_target(data + j[0], i[0]-j[0])
+        elif (i[0]-j[0]) == 9 and strncmp(data + j[0], "info_hash", i[0]-j[0]) == 0:
+            return _decode_string(data, i, max, j) and self.set_info_hash(data + j[0], i[0]-j[0])
+        elif (i[0]-j[0]) == 12 and strncmp(data + j[0], "implied_port", i[0]-j[0]) == 0:
+            return _decode_int(data, i, max, j) and self.set_implied_port(j[0])
+        elif (i[0]-j[0]) == 4 and strncmp(data + j[0], "port", i[0]-j[0]) == 0:
+            return _decode_int(data, i, max, j) and self.set_port(j[0])
+        elif (i[0]-j[0]) == 5 and strncmp(data + j[0], "token", i[0]-j[0]) == 0:
+            return _decode_string(data, i, max, j) and self.set_token(data + j[0], i[0]-j[0])
+        elif (i[0]-j[0]) == 5 and strncmp(data + j[0], "nodes", i[0]-j[0]) == 0:
+            return _decode_string(data, i, max, j) and self.set_nodes(data + j[0], i[0]-j[0])
+        elif (i[0]-j[0]) == 6 and strncmp(data + j[0], "values", i[0]-j[0]) == 0:
             if self._decode_values(data, i, max):
                 return True
             else:
-                return False
+                with gil:
+                    raise ProtocolError("", "values items should be a list")
         else:
-            if self.debug:
-                error = <char*>malloc((i[0] + 1 - j[0]) * sizeof(char))
-                error[i[0]-j[0]]='\0'
-                strncpy(error, data + j[0], i[0] - j[0])
-                printf("error %s\n", error)
-                free(error)
+            #if self.debug:
+            #    error = <char*>malloc((i[0] + 1 - j[0]) * sizeof(char))
+            #    error[i[0]-j[0]]='\0'
+            #    strncpy(error, data + j[0], i[0] - j[0])
+            #    printf("error %s\n", error)
+            #    free(error)
             if _decode_string(data, i, max, j):
                 return True
             if _decode_int(data, i, max, j):
                 return True
-            if self._decode_pass_list(data, i, max):
+            if _decode_pass_list(data, i, max):
                 return True
-            if self._decode_dict(data, i, max):
+            if _decode_pass_dict(data, i, max):
                 return True
 
-        return False
+        with gil:
+            raise ValueError("Unable to decode element of dict at %d %r" % (j[0], data[:max]))
 
-    cdef bint _decode_pass_list(self, char* data, int *i, int max) nogil:
-        cdef int j[0]
-        if i[0] >= max + 1:
-            with gil:
-                raise ValueError("%s > %s : %r" % (i[0], max, data))
-            return False
-        if data[i[0]] != "l":
-            return False
-        i[0]+=1
-        while data[i[0]] != 'e' and i[0] < max:
-            _decode_string(data, i, max, j) or _decode_int(data, i, max, j) or self._decode_pass_list(data, i, max) or self._decode_dict(data, i, max)
-        if i[0] >= max:
-            with gil:
-                raise ValueError("%s > %s : %r" % (i[0], max, data))
-            return False
-        if data[i[0]] != 'e':
-            return False
-        return True
-    cdef bint _decode_values(self, char* data, int *i, int max) nogil:
+    cdef int _decode_values(self, char* data, int *i, int max) nogil except -1:
         cdef int j[1]
         cdef int c = 0
         cdef int k = i[0] + 1
         cdef char** values
         if i[0] >= max:
             with gil:
-                raise ValueError("%s > %s : %r" % (i[0], max, data))
+                raise ValueError("%s > %s : %r" % (i[0], max, data[:max]))
         if not data[i[0]] == 'l':
             return False
         i[0]+=1
         while _decode_string(data, i, max, j):
             if (i[0]-j[0]) != 6:
-                if self.debug:
-                    with gil:
-                        raise ValueError("element of values are expected to be of length 6 and not %s" % (i[0]-j[0]))
-                return False
+                with gil:
+                    raise ValueError("element of values are expected to be of length 6 and not %s" % (i[0]-j[0]))
             c+=1
         if i[0] >=  max or data[i[0]] != 'e':
-            if self.debug:
-                with gil:
-                    raise ValueError("End of values list not found %s >= %s found %s elements" % (i[0], max, c))
-            return False
+            with gil:
+                raise ValueError("End of values list not found %s >= %s found %s elements" % (i[0], max, c))
         i[0] = k
         values = <char **>malloc(c * sizeof(char*))
         c=0
@@ -1144,24 +1120,24 @@ cdef class BMessage:
         i[0]+=1
         return True
             
-    cdef bint _decode_dict(self, char* data, int *i, int max) nogil:
+    cdef int _decode_dict(self, char* data, int *i, int max) nogil except -1:
+        cdef int k
         if data[i[0]] == 'd':
             i[0]+=1
             while data[i[0]] != 'e' and i[0] < max:
-                if self._decode_dict_elm(data, i, max):
-                    pass
-                else:
-                    break
+                k = i[0]
+                if not self._decode_dict_elm(data, i, max):
+                    with gil:
+                        raise ValueError("fail to decode dict element %d %r" % (k, data[:max]))
         if data[i[0]] != 'e':
-            if self.debug:
-                with gil:
-                    raise ValueError("End of dict not found %s>=%d %s" % (i[0], max, data))
+            with gil:
+                raise ValueError("End of dict not found %s>=%d %r" % (i[0], max, data[:max]))
             return False
         else:
             i[0]+=1
             return True
                 
-    cdef bint _decode(self, char* data, int *i, int max) nogil:
+    cdef int _decode(self, char* data, int *i, int max) nogil except -1:
         return self._decode_dict(data, i, max)
 
     def  __init__(self, addr=None, debug=False):
@@ -1190,7 +1166,7 @@ cdef class BMessage:
             
     def decode(self, char* data, int datalen):
         cdef int i = 0
-        cdef bint valid = False
+        cdef int valid = False
         with nogil:
             if datalen > 0:
                 valid = self._decode(data, &i, datalen)
