@@ -20,7 +20,7 @@ class Crawler(DHT):
     def __init__(self, *args, **kwargs):
         super(Crawler, self).__init__(*args, **kwargs)
         if self.master:
-            self.root.client = torrent.Client2()
+            self.root.client = torrent.Client()
         self.db = None
 
     def stop(self):

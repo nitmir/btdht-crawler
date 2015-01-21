@@ -4,7 +4,11 @@ dht.status
 pyaria2/*
 torrents/*
 torrents_archives/*
+torrents_done/*
 config.py
 *.id
 *.pid
 datrie/*
+*.c
+*.cpp
+*.status
