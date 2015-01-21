@@ -14,7 +14,7 @@ def get_process(file):
             process[file] = psutil.Process(pid)
             return process[file]
         except( psutil.NoSuchProcess, ValueError, IOError) as e:
-            print("%s not found: %s" % (pid, e))
+            print("%s not found: %s" % (file, e))
             return None
 
 

@@ -55,11 +55,11 @@ cdef class BMessage:
     cdef void del_y(self) nogil
     cdef int set_q(self, char* value, int size) nogil
     cdef void del_q(self) nogil
-    cdef int set_id(self, char* value, int size) nogil
+    cdef int set_id(self, char* value, int size) nogil except -1
     cdef void del_id(self) nogil
-    cdef int set_target(self, char* value, int size) nogil
+    cdef int set_target(self, char* value, int size) nogil except -1
     cdef void del_target(self) nogil
-    cdef int set_info_hash(self, char* value, int size) nogil
+    cdef int set_info_hash(self, char* value, int size) nogil except -1
     cdef void del_info_hash(self) nogil
     cdef void del_implied_port(self) nogil
     cdef int set_implied_port(self, int value) nogil
@@ -88,12 +88,12 @@ cdef class BMessage:
 
     cdef int _encode_len(self) nogil
         
-    cdef int _decode_error(self, char* data, int* i, int max) nogil
+    cdef int _decode_error(self, char* data, int* i, int max) nogil except -1
         
-    cdef int _decode_dict_elm(self, char* data, int* i, int max) nogil
+    cdef int _decode_dict_elm(self, char* data, int* i, int max) nogil except -1
 
-    cdef int _decode_values(self, char* data, int *i, int max) nogil
+    cdef int _decode_values(self, char* data, int *i, int max) nogil except -1
             
-    cdef int _decode_dict(self, char* data, int *i, int max) nogil
+    cdef int _decode_dict(self, char* data, int *i, int max) nogil except -1
 
-    cdef int _decode(self, char* data, int *i, int max) nogil
+    cdef int _decode(self, char* data, int *i, int max) nogil except -1

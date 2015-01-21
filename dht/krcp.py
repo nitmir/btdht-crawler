@@ -4,7 +4,7 @@ from utils import ID
 
 import pyximport
 pyximport.install()
-from krcp_nogil import BErrorNG
+from krcp_nogil import BError as BErrorNG
 
 class BMessage(object):
 
@@ -45,6 +45,11 @@ class BQuery(BMessage):
             t._get_transaction_id(self.r, self)
         else:
             self.t = t
+
+    def get(self, value, default=None):
+        if self.a:
+            return self.a.get(value, default)
+        return default
 
     def __init__(self, t, a, addr, v):
         self._check_t(t)
@@ -183,7 +188,7 @@ class AnnouncePeerQuery(BQuery):
             raise ProtocolError("Bad token")
         return self.r(self.t, dht.myid)
 
-class BError(BErrorNG):
+class BError(Exception):
     y = "e"
     t = None # string value representing a transaction ID
     e = None # a list. The first element is an integer representing the error code. The second element is a string containing the error message
@@ -196,7 +201,7 @@ class BError(BErrorNG):
     def __str__(self):
         return utils.bencode({"y":self.y, "t":self.t, "e":self.e})
     def __repr__(self):
-        return "%s: %s" % self.e
+        return "%s: %s" % (self.__class__.__name__, self.e)
 
 class GenericError(BError):
     def __init__(self, t, msg=""):

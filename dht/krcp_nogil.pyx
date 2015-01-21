@@ -302,9 +302,10 @@ cdef class BMessage:
             self.q_len = 0
             free(self._q)
 
-    cdef int set_id(self, char* value, int size) nogil:
+    cdef int set_id(self, char* value, int size) nogil except -1:
         if size != 20:
-            return False
+            with gil:
+                raise ValueError("id must be 20B long")
         self.encoded_uptodate = False
         if self.has_id:
             free(self.id)
@@ -320,9 +321,10 @@ cdef class BMessage:
             self.has_id = False
             free(self.id)
 
-    cdef int set_target(self, char* value, int size) nogil:
+    cdef int set_target(self, char* value, int size) nogil except -1:
         if size != 20:
-            return False
+            with gil:
+                raise ValueError("id must be 20B long")
         self.encoded_uptodate = False
         if self.has_target:
             free(self.target)
@@ -338,9 +340,10 @@ cdef class BMessage:
             self.encoded_uptodate = False
             free(self.target)
 
-    cdef int set_info_hash(self, char* value, int size) nogil:
+    cdef int set_info_hash(self, char* value, int size) nogil except -1:
         if size != 20:
-            return False
+            with gil:
+                raise ValueError("id must be 20B long")
         self.encoded_uptodate = False
         if self.has_info_hash:
             free(self.info_hash)

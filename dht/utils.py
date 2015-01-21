@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import os
 from functools import total_ordering
 def nbit(s, n):
     """Renvois la valeur du nième bit de la chaine s"""
@@ -38,14 +39,10 @@ def enumerate_ids(size, id):
             return ids
     return aux(size - 1, [id])
 
-def random(size):
-    with open("/dev/urandom") as f:
-        return f.read(size)
-
 @total_ordering
 class ID(object):
     def __generate(self):
-        return random(20)
+        return os.urandom(20)
 
     def __init__(self, id=None):
         if id is None:

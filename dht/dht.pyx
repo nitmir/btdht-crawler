@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import pyximport
-pyximport.install()
+from libc.string cimport strlen, strncmp, strcmp, strncpy, strcpy
+from libc.stdlib cimport atoi, malloc, free
 
 import IN
 import sys
 import time
 import Queue
 import heapq
+import traceback
 import struct
 import socket
 import select
@@ -19,19 +20,24 @@ from random import shuffle
 import datrie
 
 from utils import *
-from krcp import *
+from krcp import BError
 
 
-from krcp_nogil import BMessage
-from krcp_nogil import BError as BErrorNG
-class DHT(object):
+from krcp_nogil cimport BMessage
+from krcp_nogil import BError as BErrorNG, ProtocolError, GenericError, ServerError, MethodUnknownError
+cdef class DHT_BASE:
+    cdef char _myid[20]
+
     def __init__(self, routing_table=None, bind_port=None, bind_ip="0.0.0.0", id=None, ignored_ip=[], debuglvl=0, prefix="", master=False):
 
         # checking the provided id or picking a random one
         if id is not None:
-            self.myid = ID(id)
+            if len(id) != 20:
+                raise valueError("id must be 20 char long")
+            id = str(id)
         else:
-            self.myid = ID()
+            id = str(ID())
+        self.myid = ID(id)
 
         # initialising the routing table
         self.root = RoutingTable() if routing_table is None else routing_table
@@ -66,9 +72,31 @@ class DHT(object):
         self._threads_zombie = []
 
 
+    def save(self):
+        myid = str(self.myid).encode("hex")
+        with open("dht_%s.status" % myid, 'wb') as f:
+            for bucket in self.root.trie.values():
+                for node in bucket:
+                    if node.good:
+                        f.write(node.compact_info())
+
+    def load(self):
+        myid = str(self.myid).encode("hex")
+        try:
+            with open("dht_%s.status" % myid, 'rb') as f:
+                nodes = f.read(26*100)
+                while nodes:
+                    for node in Node.from_compact_infos(nodes):
+                        self.root.add(self, node)
+                    nodes = f.read(26*100)
+        except IOError as e:
+            self.debug(0, str(e))
+
     def stop_bg(self):
         if not self.stoped:
-            Thread(target=self.stop).start()
+            t=Thread(target=self.stop)
+            t.daemon = True
+            t.start()
 
     def stop(self):
         if self.stoped:
@@ -120,9 +148,9 @@ class DHT(object):
         self.init_socket()
 
         self.threads = []
-        for f in [self._recv_loop, self._send_loop, self._routine, self._get_peers_closest_loop]:
+        for f, name in [(self._recv_loop, 'recv'), (self._send_loop, 'send'), (self._routine, 'routine'), (self._get_peers_closest_loop, 'get_peers_closest')]:
             t = Thread(target=f)
-            t.setName("%s:%s" % (self.prefix, f.__func__.__name__))
+            t.setName("%s:%s" % (self.prefix, name))
             t.daemon = True
             t.start()
             self._threads.append(t)
@@ -136,7 +164,7 @@ class DHT(object):
         else:
             self.debug(0, "One thread died, stopping dht")
             self.stop_bg()
-            return True
+            return False
         
 
     def debug(self, lvl, msg):
@@ -154,7 +182,7 @@ class DHT(object):
         return (in_s, out_s, delta)
 
     def init_socket(self):
-        self.debug(0, "init socket")
+        self.debug(0, "init socket for %s" % str(self.myid).encode("hex"))
         if self.sock:
              try:self.sock.close()
              except: pass
@@ -361,12 +389,15 @@ class DHT(object):
     
     def bootstarp(self):
         self.debug(0,"Bootstraping")
-        find_node1=FindNodeQuery(self, self.myid, self.myid)
-        find_node2=FindNodeQuery(self, self.myid, self.myid)
-        find_node3=FindNodeQuery(self, self.myid, self.myid)
-        self.sendto(str(find_node1), ("router.utorrent.com", 6881))
-        self.sendto(str(find_node2), ("genua.fr", 6880))
-        self.sendto(str(find_node3), ("dht.transmissionbt.com", 6881))
+        for addr in [("router.utorrent.com", 6881), ("genua.fr", 6880), ("dht.transmissionbt.com", 6881)]:
+            msg = BMessage()
+            msg.y = 'q'
+            msg.q = "find_node"
+            self._set_transaction_id(msg)
+            msg.set_a(True)
+            msg["id"] = str(self.myid)
+            msg["target"] = str(self.myid)
+            self.sendto(str(msg), addr)
 
 
 
@@ -382,10 +413,14 @@ class DHT(object):
                     node = Node(id=id, ip=obj.addr[0], port=obj.addr[1])
                     self.root.add(self, node)
                 if obj.y == "q":
-                    node.last_query = time.time()
+                    node.last_query = int(time.time())
                 elif obj.y == "r":
-                    node.last_response = time.time()
+                    node.last_response = int(time.time())
                     node.failed = 0
+            else:
+                self.debug(1, "obj without id, no node update")
+        else:
+            self.debug(2, "obj of type %r" % obj.y)
 
     def _send_loop(self):
         while True:
@@ -404,7 +439,7 @@ class DHT(object):
                             break
                     except socket.error as e:
                         if e.errno not in [11, 1]: # 11: Resource temporarily unavailable
-                            self.debug(0, "send:%r" %e )
+                            self.debug(0, "send:%r %r" % (e, addr) )
                             raise
             except Queue.Empty:
                 pass
@@ -467,6 +502,9 @@ class DHT(object):
 
                 # if we raised a BError, send it
                 except (BError, BErrorNG) as error:
+                    if self.debuglvl > 1:
+                        traceback.print_exc()
+                        self.debug(2, "error %r" % error)
                     self.sendto(str(error), addr)
                 # if unable to bdecode, malformed packet"
                 except BcodeError:
@@ -479,12 +517,19 @@ class DHT(object):
 
                 
     def _get_transaction_id(self, reponse_type, query, id_len=6):
-        id = random(id_len)
+        id = os.urandom(id_len)
         if id in self.transaction_type:
             return self._get_transaction_id(reponse_type, query, id_len=id_len+1)
         self.transaction_type[id] = (reponse_type, time.time(), query)
         query.t = id
         return (id, query)
+
+    cdef void _set_transaction_id(self, BMessage query, int id_len=6):
+        id = os.urandom(id_len)
+        if id in self.transaction_type:
+            self._set_transaction_id(query, id_len=id_len+1)
+        self.transaction_type[id] = (None, time.time(), query)
+        query.set_t(id, id_len)
 
     def _get_token(self, ip):
         """Generate a token for `ip`"""
@@ -492,7 +537,7 @@ class DHT(object):
             #self.token[ip] = (self.token[ip][0], time.time())
             return self.token[ip][-1][0]
         else:
-            id = random(4)
+            id = os.urandom(4)
             self.token[ip].append((id, time.time()))
             return id
 
@@ -612,13 +657,14 @@ class DHT(object):
     def _on_ping_response(self, query, response):
         pass
     def _on_find_node_response(self, query, response):
-        for node in Node.from_compact_infos(response.get("nodes", "")):
+        nodes = Node.from_compact_infos(response.get("nodes", ""))
+        for node in nodes:
             try:
                 self.root.add(self, node)
             except AttributeError:
                 print "AttributeError: %r in _on_find_node_response" % node
                 raise
-        self.debug(2, "%s nodes added to routing table" % len(response.get("nodes", [])))
+        self.debug(2, "%s nodes added to routing table" % len(nodes))
     def _on_get_peers_response(self, query, response):
         token = response.get("token")
         if token:
@@ -655,8 +701,14 @@ class DHT(object):
             getattr(self, 'on_%s_query' % obj.q)(obj)
 
     def _decode(self, s, addr):
-        msg = BMessage(addr=addr)
-        msg.decode(s, len(s))
+        try:
+            msg = BMessage(addr=addr, debug=self.debuglvl)
+            msg.decode(s, len(s))
+        except ValueError as e:
+            if self.debuglvl > 0:
+                traceback.print_exc()
+                self.debug(1, "%s for %r" % (e, addr))
+            raise ProtocolError("")
         try:
             if msg.y == "q":
                 return msg, None
@@ -677,7 +729,7 @@ class DHT(object):
                     return ServerError(msg.t, msg.errmsg), query
                 elif msg.errno == 203:
                     t = self.transaction_type.get(msg.t)
-                    self.debug(0 if t else 1, "ERROR:203:%s pour %r" % (msg.errmsg, t))
+                    self.debug(1 if t else 2, "ERROR:203:%s pour %r" % (msg.errmsg, t))
                     return ProtocolError(msg.t, msg.errmsg), query
                 elif msg.errno == 204:
                     t = self.transaction_type.get(msg.t)
@@ -695,32 +747,113 @@ class DHT(object):
             raise ProtocolError(msg.t, "Message malformed")
 
 
-
 class BucketFull(Exception):
     pass
 
 class NoTokenError(Exception):
     pass
 
-@total_ordering
-class Node(object):
-    __slot__ = ("id", "ip", "port", "last_response", "last_query", "failed")
-    def __init__(self, id, ip, port, last_response=0, last_query=0, failed=0):
-        if not port > 0 and port < 65536:
-            raise ValueError("Invalid port number %s, sould be within 1 and 65535 for %s" % (port, ip))
-        self.id = id
-        self.ip = ip
-        self.port = port
-        self.last_response = last_response
-        self.last_query = last_query
-        self.failed = failed
+cdef class Node:
+    cdef char _id[20]
+    cdef char _ip[4]
+    cdef int _port
+    cdef int _last_response
+    cdef int _last_query
+    cdef int _failed
 
+    def __init__(self, id,char* ip,int port, int last_response=0,int last_query=0,int failed=0):
+        cdef char* cip
+        cdef char* cid
+        if ip[0] == '0':
+            raise ValueError("IP start with 0 *_* %r %r" % (ip, self._ip[:4]))
+        tip = socket.inet_aton(ip)
+        cip = tip
+        id = str(id)
+        cid = id
+        with nogil:
+            if not port > 0 and port < 65536:
+                with gil:
+                    raise ValueError("Invalid port number %s, sould be within 1 and 65535 for %s" % (port, ip))
+            #self._id = <char*>malloc(20 * sizeof(char))
+            strncpy(self._id, cid, 20)
+            #self._ip = <char*>malloc(4  * sizeof(char))
+            strncpy(self._ip, cip, 4)
+            self._port = port
+            self._last_response = last_response
+            self._last_query = last_query
+            self._failed = failed
+
+
+    def __richcmp__(self, Node other, int op):
+            if op == 2: # == 
+                return other.id == self.id
+            elif op == 3: # !=
+                return other.id != self.id
+            elif op == 0: # <
+                return max(self.last_response, self.last_query) < max(other.last_response, other.last_query)
+            elif op == 4: # >
+                return not (max(self.last_response, self.last_query) < max(other.last_response, other.last_query)) and not (other.id == self.id)
+            elif op == 1: # <=
+                return max(self.last_response, self.last_query) < max(other.last_response, other.last_query) or (other.id == self.id)
+            elif op == 5: # >=
+                return not (max(self.last_response, self.last_query) < max(other.last_response, other.last_query))
+            else:
+                return False
+
+
+    def __dealloc__(self):
+        with nogil:
+            #free(self._id)
+            #free(self._ip)
+            pass
+
+    property port:
+        def __get__(self):return self._port
+        def __set__(self, int i):self._port = i
+    property last_response:
+        def __get__(self):return self._last_response
+        def __set__(self, int i):self._last_response = i
+    property last_query:
+        def __get__(self):return self._last_query
+        def __set__(self, int i):self._last_query = i
+    property failed:
+        def __get__(self):return self._failed
+        def __set__(self, int i):self._failed = i
+    property id:
+        def __get__(self):
+            return self._id[:20]
+    property good:
+        def __get__(self):
+            now = time.time()
+            # A good node is a node has responded to one of our queries within the last 15 minutes.
+            # A node is also good if it has ever responded to one of our queries and has sent us a query within the last 15 minutes.
+            return ((now - self.last_response) < 15 * 60) or (self.last_response > 0 and (now - self.last_query) < 15 * 60)
+
+    property bad:
+        def __get__(self):
+            # Nodes become bad when they fail to respond to multiple queries in a row.
+            return not self.good and self.failed > 3
+
+    property ip:
+        def __get__(self):
+            ip = socket.inet_ntoa(self._ip[:4])
+            if ip[0] == '0':
+                raise ValueError("IP start with 0 *_* %r %r" % (ip, self._ip[:4]))
+            return ip
+        def __set__(self, char *ip):
+            cdef char* cip
+            if ip[0] == '0':
+                raise ValueError("IP start with 0 *_* %r %r" % (ip, self._ip[:4]))
+            tip = socket.inet_aton(ip)
+            cip = tip
+            with nogil:
+                strncmp(self._ip, cip, 4)
 
     def __repr__(self):
         return "Node: %s:%s" % (self.ip, self.port)
 
     def compact_info(self):
-        return struct.pack("!20s4sH", str(self.id), socket.inet_aton(self.ip), self.port)
+        return struct.pack("!20s4sH", str(self.id), self._ip, self.port)
 
     @classmethod
     def from_compact_infos(cls, infos, v=""):
@@ -747,53 +880,75 @@ class Node(object):
         id = ID(id)
         return cls(id, ip, port)
 
-    @property
-    def good(self):
-        now = time.time()
-        # A good node is a node has responded to one of our queries within the last 15 minutes.
-        # A node is also good if it has ever responded to one of our queries and has sent us a query within the last 15 minutes.
-        return ((now - self.last_response) < 15 * 60) or (self.last_response > 0 and (now - self.last_query) < 15 * 60)
 
-    @property
-    def bad(self):
-        # Nodes become bad when they fail to respond to multiple queries in a row.
-        return not self.good and self.failed > 3
 
-    def __lt__(self, other):
-        if isinstance(other, Node):
-            max(self.last_response, self.last_query) < max(other.last_response, other.last_query)
+    def __cmp__(self, Node other):
+        if self.__richcmp__(other, 0):
+            return -1
+        elif self.__richcmp__(other, 2):
+            return 0
         else:
-            raise TypeError("unsupported operand type(s) for <: 'Node' and '%s'" % type(other).__name__)
-
-    def __eq__(self, other):
-        if isinstance(other, Node):
-            return self.id == other.id
-        else:
-            return False
+            return 1
 
     def __hash__(self):
         return hash(self.id)
 
-    def ping(self, dht):
-        msg = PingQuery(dht, dht.myid)
-        self.failed+=1
+    def ping(self, DHT_BASE dht):
+        id = str(dht.myid)
+        msg = BMessage()
+        dht._set_transaction_id(msg)
+        msg.set_y("q", 1)
+        msg.set_q("ping", 4)
+        msg.set_a(True)
+        msg.set_id(id, len(dht.myid))
+        self._failed+=1
         dht.sendto(str(msg), (self.ip, self.port))
 
-    def find_node(self, dht, target):
-        msg = FindNodeQuery(dht, dht.myid, target)
-        self.failed+=1
+    def find_node(self, DHT_BASE dht, target):
+        id = str(dht.myid)
+        target = str(target)
+        tl = len(target)
+        msg = BMessage()
+        dht._set_transaction_id(msg)
+        msg.set_y("q", 1)
+        msg.set_q("find_node", 9)
+        msg.set_a(True)
+        msg.set_id(id, len(dht.myid))
+        msg.set_target(target, tl)
+        self._failed+=1
         dht.sendto(str(msg), (self.ip, self.port))
 
-    def get_peers(self, dht, info_hash):
-        msg = GetPeersQuery(dht, dht.myid, info_hash, )
-        self.failed+=1
+    def get_peers(self, DHT_BASE dht, info_hash):
+        id = str(dht.myid)
+        info_hash = str(info_hash)
+        ihl = len(info_hash)
+        msg = BMessage()
+        dht._set_transaction_id(msg)
+        msg.set_y("q", 1)
+        msg.set_q("get_peers", 9)
+        msg.set_a(True)
+        msg.set_id(id, len(dht.myid))
+        msg.set_info_hash(info_hash, ihl)
+        self._failed+=1
         dht.sendto(str(msg), (self.ip, self.port))
 
-    def announce_peer(self, dht, info_hash, port):
+    def announce_peer(self, DHT_BASE dht, info_hash, int port):
+        cdef char* tk
+        cdef char* ih
         if self.id in dht.mytoken and (time.time() - dht.mytoken[self.id][1]) < 600:
+            id = str(dht.myid)
+            info_hash = str(info_hash)
             token = dht.mytoken[self.id][0]
-            msg = AnnouncePeerQuery(dht, dht.myid, info_hash, port, token)
-            self.failed+=1
+            msg = BMessage()
+            dht._set_transaction_id(msg)
+            msg.set_y("q", 1)
+            msg.set_q("announce_peer", 13)
+            msg.set_a(True)
+            msg.set_id(id, len(dht.myid))
+            msg.set_info_hash(info_hash, len(info_hash))
+            msg.set_port(port)
+            msg.set_token(token, len(info_hash))
+            self._failed+=1
             dht.sendto(str(msg), (self.ip, self.port))
 
         else:
@@ -906,6 +1061,9 @@ class Bucket(list):
     def to_refresh(self):
         return time.time() - self.last_changed > 15 * 60
 
+
+class DHT(DHT_BASE):
+    pass
 class NotFound(Exception):
     pass
 
@@ -1061,10 +1219,6 @@ class RoutingTable(object):
                         fstop()
                     sys.exit(0)
             time.sleep(t_dec)
-
-    def save(self):
-        myid = str(self.myid).encode("hex")
-        pickle.dump(self.root, open("dht_%s.status" % myid, 'w+'))
 
     def debug(self, lvl, msg):
         if lvl <= self.debuglvl:
