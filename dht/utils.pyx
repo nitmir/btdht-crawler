@@ -21,9 +21,6 @@ def nset(s, n , i):
     else:
         raise ValueError("i doit être 0 ou 1")
     
-def format_hash(hash):
-    return "".join("{:02x}".format(ord(c)) for c in hash)
-
 class BcodeError(Exception):
     pass
 
