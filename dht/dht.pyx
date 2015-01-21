@@ -3,28 +3,31 @@
 from libc.string cimport strlen, strncmp, strcmp, strncpy, strcpy
 from libc.stdlib cimport atoi, malloc, free
 
+import os
 import IN
 import sys
 import time
-import Queue
+try:
+    import Queue
+except ImportError:
+    import queue as Queue
 import heapq
 import traceback
 import struct
 import socket
 import select
 import collections
-from functools import total_ordering
+from functools import total_ordering, reduce
 from threading import Thread, Lock
 from random import shuffle
 
 import datrie
 
-from utils import *
-from krcp import BError
+from utils import ID, nbit, nflip, nset
 
+from krcp cimport BMessage
+from krcp import BError, ProtocolError, GenericError, ServerError, MethodUnknownError
 
-from krcp_nogil cimport BMessage
-from krcp_nogil import BError as BErrorNG, ProtocolError, GenericError, ServerError, MethodUnknownError
 cdef class DHT_BASE:
     cdef char _myid[20]
 
@@ -33,7 +36,7 @@ cdef class DHT_BASE:
         # checking the provided id or picking a random one
         if id is not None:
             if len(id) != 20:
-                raise valueError("id must be 20 char long")
+                raise ValueError("id must be 20 char long")
             id = str(id)
         else:
             id = str(ID())
@@ -72,18 +75,24 @@ cdef class DHT_BASE:
         self._threads_zombie = []
 
 
-    def save(self):
-        myid = str(self.myid).encode("hex")
-        with open("dht_%s.status" % myid, 'wb') as f:
+    def save(self, filename=None):
+        """save the current list of nodes to `filename`. Default filename is dht_$(ID).status"""
+        if filename is None:
+            myid = str(self.myid).encode("hex")
+            filename = "dht_%s.status" % myid
+        with open(filename, 'wb') as f:
             for bucket in self.root.trie.values():
                 for node in bucket:
                     if node.good:
                         f.write(node.compact_info())
 
-    def load(self):
-        myid = str(self.myid).encode("hex")
+    def load(self, filename=None):
+        """load a list of nodes from `filename`. Default filename is dht_$(ID).status"""
+        if filename is None:
+            myid = str(self.myid).encode("hex")
+            filename = "dht_%s.status" % myid
         try:
-            with open("dht_%s.status" % myid, 'rb') as f:
+            with open(filename, 'rb') as f:
                 nodes = f.read(26*100)
                 while nodes:
                     for node in Node.from_compact_infos(nodes):
@@ -93,12 +102,14 @@ cdef class DHT_BASE:
             self.debug(0, str(e))
 
     def stop_bg(self):
+        """Lauch the stop process of the dht and return immediately"""
         if not self.stoped:
             t=Thread(target=self.stop)
             t.daemon = True
             t.start()
 
     def stop(self):
+        """Stop the dht"""
         if self.stoped:
             self.debug(0, "Already stoped or soping in progress")
             return
@@ -125,6 +136,7 @@ cdef class DHT_BASE:
             except: pass
         
     def start(self):
+        """Start the threads of the dht"""
         if not self.stoped:
             self.debug(0, "Already started")
             return
@@ -157,6 +169,7 @@ cdef class DHT_BASE:
             self.threads.append(t)
 
     def is_alive(self):
+        """Test if all threads of the dht are alive, stop the dht if one of the thread is dead"""
         if self.threads and reduce(lambda x,y: x and y, [t.is_alive() for t in self.threads]):
             return True
         elif not self._threads and self.stoped:
@@ -168,6 +181,7 @@ cdef class DHT_BASE:
         
 
     def debug(self, lvl, msg):
+        """to print msg if lvl > self.debuglvl"""
         if lvl <= self.debuglvl:
             print(self.prefix + msg)
 
@@ -182,6 +196,7 @@ cdef class DHT_BASE:
         return (in_s, out_s, delta)
 
     def init_socket(self):
+        """Initialize the UDP socket of the DHT"""
         self.debug(0, "init socket for %s" % str(self.myid).encode("hex"))
         if self.sock:
              try:self.sock.close()
@@ -199,6 +214,7 @@ cdef class DHT_BASE:
 
 
     def sleep(self, t, fstop=None):
+        """Sleep for t seconds. If the dht is requested to be stop, run fstop and exit"""
         if t>0:
             t_int = int(t)
             t_dec = t - t_int
@@ -284,6 +300,7 @@ cdef class DHT_BASE:
             return peers
 
     def _get_peers_closest_loop(self):
+        """Function run by the thread exploring the DHT"""
         def on_stop(hash, typ):
             self.root.release_torrent(hash)
             if typ == "peers":
@@ -381,6 +398,7 @@ cdef class DHT_BASE:
                return [(ip, port) for (_, ip, port) in peers]
 
     def get_closest_nodes(self, id, compact=False):
+        """return the current K closest nodes from id"""
         l = list(self.root.get_closest_nodes(id))
         if compact:
             return "".join(n.compact_info() for n in l)
@@ -388,6 +406,7 @@ cdef class DHT_BASE:
             return list(self.root.get_closest_nodes(id))
     
     def bootstarp(self):
+        """boostrap the DHT to some wellknown nodes"""
         self.debug(0,"Bootstraping")
         for addr in [("router.utorrent.com", 6881), ("genua.fr", 6880), ("dht.transmissionbt.com", 6881)]:
             msg = BMessage()
@@ -402,6 +421,7 @@ cdef class DHT_BASE:
 
 
     def _update_node(self, obj):
+        """update a node the in routing table on msg received"""
         if obj.y == "q" or obj.y == "r":
             id = obj.get("id")
             if id:
@@ -423,6 +443,7 @@ cdef class DHT_BASE:
             self.debug(2, "obj of type %r" % obj.y)
 
     def _send_loop(self):
+        """function lauch by the thread sending the udp msg"""
         while True:
             if self.stoped:
                 return
@@ -445,9 +466,11 @@ cdef class DHT_BASE:
                 pass
 
     def sendto(self, msg, addr):
+        """program a msg to be send over the network"""
         self._to_send.put((msg, addr))
 
     def _recv_loop(self):
+        """function lauch by the thread receiving the udp messages from the DHT"""
         while True:
             if self.stoped:
                 return
@@ -501,14 +524,11 @@ cdef class DHT_BASE:
                         self.on_error(obj, obj_opt)
 
                 # if we raised a BError, send it
-                except (BError, BErrorNG) as error:
+                except (BError,) as error:
                     if self.debuglvl > 1:
                         traceback.print_exc()
                         self.debug(2, "error %r" % error)
                     self.sendto(str(error), addr)
-                # if unable to bdecode, malformed packet"
-                except BcodeError:
-                    self.sendto(str(ProtocolError("", "malformed packet")), addr)
                 # socket unavailable ?
                 except socket.error as e:
                     if e.errno not in [11, 1]: # 11: Resource temporarily unavailable
@@ -516,15 +536,8 @@ cdef class DHT_BASE:
                         raise
 
                 
-    def _get_transaction_id(self, reponse_type, query, id_len=6):
-        id = os.urandom(id_len)
-        if id in self.transaction_type:
-            return self._get_transaction_id(reponse_type, query, id_len=id_len+1)
-        self.transaction_type[id] = (reponse_type, time.time(), query)
-        query.t = id
-        return (id, query)
-
     cdef void _set_transaction_id(self, BMessage query, int id_len=6):
+        """Set the transaction id (key t of the dictionnary) on a query"""
         id = os.urandom(id_len)
         if id in self.transaction_type:
             self._set_transaction_id(query, id_len=id_len+1)
@@ -550,11 +563,14 @@ cdef class DHT_BASE:
             return []
 
     def clean(self):
+        """Function called every 15s to do some cleanning. It can safely be overload"""
         pass
     def clean_long(self):
+        """Function called every 15min to do some cleanning. It can safely be overload"""
         pass
 
     def _clean(self):
+        """Function cleaning datastructures of the DHT"""
         now = time.time()
 
         for id in self.transaction_type.keys():
@@ -603,12 +619,14 @@ cdef class DHT_BASE:
             self.long_clean = now
 
     def build_table(self):
+        """Build the routing table by querying find_nodes on his own id"""
         nodes = self.get_closest_nodes(self.myid)
         for node in nodes:
             node.find_node(self, self.myid)
         return bool(nodes)
 
     def _routine(self):
+        """function lauch by the thread performing some routine (boostraping, building the routing table, cleaning) on the DHT"""
         next_routine = time.time() + 15
         while True:
             if self.stoped:
@@ -637,22 +655,31 @@ cdef class DHT_BASE:
 
 
     def on_error(self, error, query=None):
+        """function called then a query has be responded by an error message. Can safely the overloaded"""
         pass
     def on_ping_response(self, query, response):
+        """function called on a ping response reception. Can safely the overloaded"""
         pass
     def on_find_node_response(self, query, response):
+        """function called on a find_node response reception. Can safely the overloaded"""
         pass
     def on_get_peers_response(self, query, response):
+        """function called on a get_peers response reception. Can safely the overloaded"""
         pass
     def on_announce_peer_response(self, query, response):
+        """function called on a announce_peer response reception. Can safely the overloaded"""
         pass
     def on_ping_query(self, query):
+        """function called on a ping query reception. Can safely the overloaded"""
         pass
     def on_find_node_query(self, query):
+        """function called on a find_node query reception. Can safely the overloaded"""
         pass
     def on_get_peers_query(self, query):
+        """function called on a get_peers query reception. Can safely the overloaded"""
         pass
     def on_announce_peer_query(self, query):
+        """function called on a announce query reception. Can safely the overloaded"""
         pass
     def _on_ping_response(self, query, response):
         pass
@@ -701,6 +728,7 @@ cdef class DHT_BASE:
             getattr(self, 'on_%s_query' % obj.q)(obj)
 
     def _decode(self, s, addr):
+        """decode a message"""
         try:
             msg = BMessage(addr=addr, debug=self.debuglvl)
             msg.decode(s, len(s))
@@ -894,6 +922,7 @@ cdef class Node:
         return hash(self.id)
 
     def ping(self, DHT_BASE dht):
+        """send a ping query to the node"""
         id = str(dht.myid)
         msg = BMessage()
         dht._set_transaction_id(msg)
@@ -905,6 +934,7 @@ cdef class Node:
         dht.sendto(str(msg), (self.ip, self.port))
 
     def find_node(self, DHT_BASE dht, target):
+        """send a find_node query to the node"""
         id = str(dht.myid)
         target = str(target)
         tl = len(target)
@@ -919,6 +949,7 @@ cdef class Node:
         dht.sendto(str(msg), (self.ip, self.port))
 
     def get_peers(self, DHT_BASE dht, info_hash):
+        """send a get_peers query to the node"""
         id = str(dht.myid)
         info_hash = str(info_hash)
         ihl = len(info_hash)
@@ -933,6 +964,7 @@ cdef class Node:
         dht.sendto(str(msg), (self.ip, self.port))
 
     def announce_peer(self, DHT_BASE dht, info_hash, int port):
+        """send a announce_peer query to the node"""
         cdef char* tk
         cdef char* ih
         if self.id in dht.mytoken and (time.time() - dht.mytoken[self.id][1]) < 600:
