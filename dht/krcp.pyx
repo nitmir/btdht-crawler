@@ -21,7 +21,7 @@ r
 from libc cimport math
 from libc.stdio cimport printf, sprintf
 from libc.string cimport strlen, strncmp, strcmp, strncpy, strcpy
-from libc.stdlib cimport atoi, malloc, free
+from libc.stdlib cimport atoi, atoll, malloc, free
 from cython.parallel import prange
 
 import utils
@@ -34,6 +34,22 @@ cdef int str_to_int(char* data, int len) nogil:
         strncpy(msg, data, len)
         msg[len]='\0'
         i = atoi(msg)
+    finally:
+        if msg != NULL:
+            free(msg)
+    return i
+
+cdef int str_to_long_long(char* data, int len) nogil:
+    cdef char* msg = NULL
+    cdef long long i
+    if data[0] == '-' and len > 16 or len > 17:
+        with gil:
+            raise EnvironmentError("Trying to convert %s to long long but it's too big" % data[:len])
+    try:
+        msg = <char *>malloc((len+1) * sizeof(char))
+        strncpy(msg, data, len)
+        msg[len]='\0'
+        i = atoll(msg)
     finally:
         if msg != NULL:
             free(msg)
@@ -65,6 +81,7 @@ cdef char** vlist_to_array(l, int size=6):
 
 cdef int _decode_pass_list(char* data, int *i, int max) nogil except -1:
     cdef int j[0]
+    cdef long long ll[0]
     if i[0] >= max + 1:
         with gil:
             raise ValueError("%s > %s : %r" % (i[0], max, data[:max]))
@@ -73,7 +90,7 @@ cdef int _decode_pass_list(char* data, int *i, int max) nogil except -1:
         return False
     i[0]+=1
     while data[i[0]] != 'e' and i[0] < max:
-        if not _decode_string(data, i, max, j) and not  _decode_int(data, i, max, j) and not _decode_pass_list(data, i, max) and not _decode_pass_dict(data, i, max):
+        if not _decode_string(data, i, max, j) and not  _decode_int(data, i, max, ll) and not _decode_pass_list(data, i, max) and not _decode_pass_dict(data, i, max):
             with gil:
                 raise ValueError("Unable to parse one of the element of the list %d %r" % (i[0], data[:max]))
     if i[0] >= max:
@@ -87,6 +104,7 @@ cdef int _decode_pass_list(char* data, int *i, int max) nogil except -1:
 
 cdef int _decode_pass_dict(char* data, int *i, int max) nogil except -1:
     cdef int j[0]
+    cdef long long ll[0]
     if i[0] >= max + 1:
         with gil:
             raise ValueError("%s > %s : %r" % (i[0], max, data[:max]))
@@ -95,7 +113,7 @@ cdef int _decode_pass_dict(char* data, int *i, int max) nogil except -1:
         return False
     i[0]+=1
     while data[i[0]] != 'e' and i[0] < max:
-        if not _decode_string(data, i, max, j) or (not _decode_string(data, i, max, j) and not _decode_int(data, i, max, j) and not _decode_pass_list(data, i, max) and not _decode_pass_dict(data, i, max)):
+        if not _decode_string(data, i, max, j) or (not _decode_string(data, i, max, j) and not _decode_int(data, i, max, ll) and not _decode_pass_list(data, i, max) and not _decode_pass_dict(data, i, max)):
             with gil:
                 raise ValueError("Unable to parse one of the element of the dict %d %r" % (i[0], data[:max]))
     if i[0] >= max:
@@ -136,7 +154,11 @@ cdef int _decode_string(char* data, int* i, int max, int* j) nogil except -1:
     else:
         return False
 
-cdef int _decode_int(char* data, int *i, int max, int *myint) nogil:
+cdef int _decode_int(char* data, int *i, int max, long long  *myint) nogil except -1:
+    """
+       warning ! use only if you are sure that int to decode fetch in a signed 64bit integer
+       otherwise, use the function from utils that can decode arbitrary long integer
+    """
     cdef int j
     if data[i[0]] == 'i':
         i[0]+=1
@@ -144,14 +166,16 @@ cdef int _decode_int(char* data, int *i, int max, int *myint) nogil:
         while data[j]!='e' and j < max:
             j+=1
         if data[j] == 'e':
-            myint[0]=str_to_int(data + i[0], j-i[0])
+            myint[0]=str_to_long_long(data + i[0], j-i[0])
             i[0]=j+1
             if i[0] <= max:
                 return True
             else:
-                return False
+                with gil:
+                     raise ValueError("%s > %s : %r" % (i[0], max, data[:max]))
         else:
-            return False
+            with gil:
+                raise ValueError("%s != e at %s %r" % (data[j], j, data[:max]))
     else:
         return False
                 
@@ -564,7 +588,7 @@ cdef class BMessage:
             return False
         data[i[0]]='l'
         i[0]+=1
-        for j in prange(self.values_nb, nogil=True):
+        for j in prange(self.values_nb):
             #printf("encode value %d in encode_values\n", j)
             strncpy(data + i[0],"6:", 2)
             i[0]+=2
@@ -790,8 +814,13 @@ cdef class BMessage:
         return estimated_len
         
     def encode(self):
-        if self.encoded_uptodate or self._encode():
-            return self.encoded[:self.encoded_len]
+        if self.encoded_uptodate:
+                return self.encoded[:self.encoded_len]
+        else:
+            with nogil:
+                self._encode()        
+        if self.encoded_uptodate:
+                return self.encoded[:self.encoded_len]
         else:
             raise EnvironmentError("Unable to encode BMessage")
 
@@ -1015,15 +1044,16 @@ cdef class BMessage:
 
     cdef int _decode_error(self, char* data, int* i, int max) nogil except -1:
         cdef int j[1]
+        cdef long long ll[1]
         if i[0] > max:
             with gil:
                 raise ValueError("%s > %s : %r" % (i[0], max, data[:max]))
         if data[i[0]] != 'l':
             return False
         i[0]+=1
-        if not _decode_int(data, i, max, j):
+        if not _decode_int(data, i, max, ll):
             return False
-        self.set_errno(j[0])
+        self.set_errno(ll[0])
         if not _decode_string(data, i, max, j):
             return False
         self.set_errmsg(data + j[0], i[0]-j[0])
@@ -1035,6 +1065,7 @@ cdef class BMessage:
     cdef int _decode_dict_elm(self, char* data, int* i, int max) nogil except -1:
         cdef char* error
         cdef int j[1]
+        cdef long long ll[1]
         j[0]=0
         if not _decode_string(data, i, max, j):
             with gil:
@@ -1061,9 +1092,9 @@ cdef class BMessage:
         elif (i[0]-j[0]) == 9 and strncmp(data + j[0], "info_hash", i[0]-j[0]) == 0:
             return _decode_string(data, i, max, j) and self.set_info_hash(data + j[0], i[0]-j[0])
         elif (i[0]-j[0]) == 12 and strncmp(data + j[0], "implied_port", i[0]-j[0]) == 0:
-            return _decode_int(data, i, max, j) and self.set_implied_port(j[0])
+            return _decode_int(data, i, max, ll) and self.set_implied_port(ll[0])
         elif (i[0]-j[0]) == 4 and strncmp(data + j[0], "port", i[0]-j[0]) == 0:
-            return _decode_int(data, i, max, j) and self.set_port(j[0])
+            return _decode_int(data, i, max, ll) and self.set_port(ll[0])
         elif (i[0]-j[0]) == 5 and strncmp(data + j[0], "token", i[0]-j[0]) == 0:
             return _decode_string(data, i, max, j) and self.set_token(data + j[0], i[0]-j[0])
         elif (i[0]-j[0]) == 5 and strncmp(data + j[0], "nodes", i[0]-j[0]) == 0:
@@ -1083,7 +1114,7 @@ cdef class BMessage:
             #    free(error)
             if _decode_string(data, i, max, j):
                 return True
-            if _decode_int(data, i, max, j):
+            if _decode_int(data, i, max, ll):
                 return True
             if _decode_pass_list(data, i, max):
                 return True

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
+#import resource
+#resource.setrlimit(resource.RLIMIT_CPU, (60*2, -1))
 import os
 import io
 import gzip
@@ -48,53 +49,79 @@ def last_timestamp(self):
 
 def scrape(db):
     cur = db.cursor()
-    query = "SELECT hash FROM torrents WHERE name IS NOT NULL AND (scrape_date IS NULL OR scrape_date <= DATE_SUB(NOW(), INTERVAL 30 MINUTE)) ORDER BY scrape_date ASC"
+    query = "SELECT COUNT(id) FROM torrents WHERE name IS NOT NULL AND (scrape_date IS NULL OR scrape_date <= DATE_SUB(NOW(), INTERVAL 30 MINUTE)) ORDER BY scrape_date ASC"
     cur.execute(query)
-    count=0
-    hashs = [r[0] for r in cur]
-    count=len(hashs)
+    ret = [r[0] for r in cur]
+    count=ret[0]
+    #hashs = [r[0] for r in cur]
+    #count=len(hashs)
     qhashs = queue.Queue()
     i=0
     n_count = 0
 
     if count <= 0:
         return
-    while hashs[i:i+74]:
-        qhashs.put(hashs[i:i+74])
-        i=min(i + 74, count)
+    #while hashs[i:i+74]:
+    #    qhashs.put(hashs[i:i+74])
+    #    i=min(i + 74, count)
 
     pbar = progressbar.ProgressBar(widgets=widget("torrents scraped"), maxval=count).start()    
-    def scrape_thread(qhashs):
+    def scrape_thread(qhashs, nth, total, ip="open.demonii.com"):
         nonlocal n_count, count, pbar
+        query = "SELECT hash FROM torrents WHERE name IS NOT NULL AND (scrape_date IS NULL OR scrape_date <= DATE_SUB(NOW(), INTERVAL 30 MINUTE)) AND id %% %s = %s ORDER BY scrape_date ASC" % (int(total), int(nth))
         db = MySQLdb.connect(**config.mysql)
+        db2 = MySQLdb.connect(**config.mysql)
         cur = db.cursor()
+        cur2 = db2.cursor()
+        cur2.execute(query)
         last_commit = time.time()
+        errno=0
         try:
+            l=[]
             while True:
-                #l = dict(qhashs.get(timeout=0))
-                l = qhashs.get(timeout=0)
-                for hash, info in scraper.scrape("udp://open.demonii.com:1337/announce", l).items():
-                    cur.execute("UPDATE torrents SET scrape_date=NOW(), seeders=%s, leechers=%s, downloads_count=%s WHERE hash=%s", (info['seeds'], info['peers'], info['complete'], hash))
-                    #cur.execute("UPDATE scrape SET scrape_date=NOW(), seeders=%s, leechers=%s, downloads_count=%s WHERE id=%s", (info['seeds'], info['peers'], info['complete'], l[hash]))
-                if time.time() - last_commit > 30:
+                if not l:
+                    i=0
+                    for r in cur2:
+                        l.append(r[0])
+                        i+=1
+                        if i >= 74:
+                            break
+                if not l:
+                    l = qhashs.get(timeout=0)
+                try:
+                    for hash, info in scraper.scrape("udp://%s:1337/announce" % ip, l).items():
+                        cur.execute("UPDATE torrents SET scrape_date=NOW(), seeders=%s, leechers=%s, downloads_count=%s WHERE hash=%s", (info['seeds'], info['peers'], info['complete'], hash))
+                        #cur.execute("UPDATE scrape SET scrape_date=NOW(), seeders=%s, leechers=%s, downloads_count=%s WHERE id=%s", (info['seeds'], info['peers'], info['complete'], l[hash]))
+                    if time.time() - last_commit > 30:
+                        db.commit()
+                        last_commit = time.time()
+                    n_count+=len(l)
+                    pbar.update(min(n_count, count))
+                    l=[]
+                    errno=0
+                except (socket.timeout, PermissionError, socket.gaierror):
                     db.commit()
-                    last_commit = time.time()
-                n_count+=70
-                pbar.update(min(n_count, count))
+                    errno+=1
+                    if errno > 10:
+                        raise
+                    time.sleep(1)
+                    #qhashs.put(l)
         except queue.Empty:
-            pass
-        except (socket.timeout, PermissionError):
-            qhashs.put(l)
             pass
         finally:
             db.commit()
             cur.close()
+            cur2.close()
             db.close()
+            db2.close()
 
     try:
         threads = []
-        for i in range(0, 20):
-            t = Thread(target=scrape_thread, args=(qhashs,))
+        total = 20
+        ipv4 = socket.gethostbyname_ex("open.demonii.com")[2]
+        mod = len(ipv4)
+        for i in range(0, total):
+            t = Thread(target=scrape_thread, args=(qhashs, i,total, ipv4[i % mod]))
             t.daemon = True
             t.start()
             threads.append(t)
@@ -108,7 +135,7 @@ def scrape(db):
 def update_torrent_file(db=None):
     if db is None:
         db = MySQLdb.connect(**config.mysql)
-    hashs = get_hash(db, insert_new=True, dir_only=True)
+    hashs = get_hash(db, insert_new=True, dir_only=True, name_null=True)
     update_db(db, hashs, quiet=True)
 
 def insert(new_hashq, pbar):
@@ -143,7 +170,7 @@ def get_new_torrent():
         except utils.BcodeError as e:
             pass
 
-def get_hash(db=None, insert_new=False, dir_only=False):
+def get_hash(db=None, insert_new=False, dir_only=False, name_null=False):
     if db is None:
         db = MySQLdb.connect(**config.mysql)          
     cur = db.cursor()
@@ -179,6 +206,12 @@ def get_hash(db=None, insert_new=False, dir_only=False):
             finally:
                 pbar.finish()
     if dir_only:
+        if name_null:
+            query = "SELECT hash FROM torrents WHERE name IS NULL AND (%s)"  % " OR ".join("hash=%s" for hash in hashs)
+            cur.execute(query, tuple(hashs))
+            ret = [r[0] for r in cur]
+            cur.close()
+            return ret
         return hashs
     else:
         query = "SELECT hash FROM torrents WHERE name IS NULL AND (dht_last_get >= DATE_SUB(NOW(), INTERVAL 1 HOUR) OR dht_last_announce >= DATE_SUB(NOW(), INTERVAL 1 HOUR) OR %s)"  % " OR ".join("hash=%s" for hash in hashs)
@@ -302,10 +335,12 @@ def fetch_torrent(db):
                 load_url(db, cur, hash)
         except queue.Empty:
             pass
-        except socket.timeout:
+        except (socket.timeout, urllib.error.URLError):
             print("socket timeout http://torcache.net/torrent/%s.torrent" % hash.upper())
+            qhashs.put(hash)
         except ConnectionResetError:
             print("ConnectionResetError http://torcache.net/torrent/%s.torrent" % hash.upper())
+            qhashs.put(hash)
         finally:
             db.commit()
             db.close()
@@ -325,15 +360,30 @@ def fetch_torrent(db):
         db.commit()
     print("%s found, %s not found, %s already gotten" % (found_nb, notfound_nb, already_nb))
     return notfound
-            
+
+
+def find_wrong_hash():
+    hashs = [h[:-8] for h in os.listdir("torrents_archives/2015-01-22/") if h.endswith(".torrent")]
+    progress = progressbar.ProgressBar(widgets=widget("torrents"))
+    for hash in progress(hashs):
+        torrent = get_torrent(None, hash, "torrents_archives/2015-01-22")
+        if torrent and torrent[b'info'][b'pieces']:
+            real_hash = hashlib.sha1(utils.bencode(torrent[b'info'])).hexdigest()
+            if real_hash != hash:
+                print("\rWrong torrent hash %s --> %s" % (hash, real_hash))
+                os.rename("torrents_archives/2015-01-22/%s.torrent" % hash, "torrents/%s.torrent" % real_hash)
+
 def get_torrent(db, hash, base_path="torrents"):
     global downloading, failed
     if hash in failed:
         return None
     if os.path.isfile("%s/%s.torrent" % (base_path, hash)):
+        #print("get hash %s" % hash)
         torrent = open("%s/%s.torrent" % (base_path, hash), 'rb').read()
         try:
+            #print("parsing")
             torrent = utils.bdecode(torrent)
+            #print("parsed")
             if not b'info' in torrent:
                 return {b'info':torrent}
             else:
@@ -561,7 +611,7 @@ def loop():
     sql_error = False
     db = MySQLdb.connect(**config.mysql)
     #init_scrape_table(db)
-    update_db(db)
+    #update_db(db)
     #add_to_aria(db)
     db.commit()
     db.close()
@@ -648,8 +698,8 @@ def upload_to_torcache(db, hash, quiet=False):
                 print("Uploaded %s to torcache" % hash)
             Replicator.send_torrent([(hash, ("http://torcache.net/torrent/%s.torrent" % hash.upper()))])
         elif 'X-Torrage-Infohash' in r.headers:
-            print("Bad hash %s -> %s" % (hash, r.headers.get('X-Torrage-Infohash')))
-            update_db(db, [hash])
+            print("Bad hash %s -> %s" % (hash, r.headers.get('X-Torrage-Infohash').lower()))
+            update_db(db, [hash], quiet=True)
     finally:
         db.commit()
     return r
@@ -680,7 +730,7 @@ def feed_torcache(db, hashs=None):
                 hash = hashsq.get(timeout=0)
                 tc = is_torcache(hash)
                 if not tc and os.path.isfile("torrents/%s.torrent" % hash):
-                    t = get_torrent(db, hash)
+                    #t = get_torrent(db, hash)
                     upload_to_torcache(db, hash, quiet=True)
                     up_nb+=1
                 elif tc:

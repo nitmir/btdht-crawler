@@ -23,15 +23,47 @@ from random import shuffle
 
 import datrie
 
+import utils
 from utils import ID, nbit, nflip, nset
 
 from krcp cimport BMessage
 from krcp import BError, ProtocolError, GenericError, ServerError, MethodUnknownError
 
 cdef class DHT_BASE:
+    """
+    Attributes:
+      root (RoutingTable): the dht instance routing table
+      bind_port (int): udp port to which this dht instance is binded
+      bind_ip (str): ip addresse to which this dht instance is binded
+      myid (str): 160bits long (20 Bytes) id of the node running this
+        instance of the dht.
+      debuglvl (int): Level of verbosity
+      master (bool): A boolean value to disting a particular dht instance
+      threads (list of Thread): list of the threads of the dht instance
+    """
     cdef char _myid[20]
 
-    def __init__(self, routing_table=None, bind_port=None, bind_ip="0.0.0.0", id=None, ignored_ip=[], debuglvl=0, prefix="", master=False):
+    def __init__(self, routing_table=None, bind_port=None, bind_ip="0.0.0.0",
+      id=None, ignored_ip=[], debuglvl=0, prefix="", master=False):
+        """
+        Note:
+           try to use same `id` and `bind_port` over dht restart to increase
+           the probability to remain in other nodes buckets
+
+        Args:
+          routing_table (RoutingTable, optional): A routing table possibly
+            shared between several dht instance. By default a new one is
+            instanciated.
+          bind_port (int, optional): udp port to which bind this dht instance
+            default is to let the system choose an available port.
+          bind_ip (str, optional): default to "0.0.0.0".
+          id (str, optional): 160bits long (20 Bytes) id of the node running
+            this instance of the dht. Default is to choose a random id
+          ignored_ip (list of str, optional): a list of ip to ignore message from
+          debuglvl (int, optional): Level of verbosity, default to 0
+          master (bool, optional): A boolean value to disting a particular dht
+            instance among several other then subclassing. Unused. default to False
+        """
 
         # checking the provided id or picking a random one
         if id is not None:
@@ -76,7 +108,12 @@ cdef class DHT_BASE:
 
 
     def save(self, filename=None):
-        """save the current list of nodes to `filename`. Default filename is dht_$(ID).status"""
+        """save the current list of nodes to `filename`. 
+
+        Args:
+          filename (str, optional): filename where the list of known node is saved.
+            default to dht_`id`.status
+        """
         if filename is None:
             myid = str(self.myid).encode("hex")
             filename = "dht_%s.status" % myid
@@ -87,7 +124,12 @@ cdef class DHT_BASE:
                         f.write(node.compact_info())
 
     def load(self, filename=None):
-        """load a list of nodes from `filename`. Default filename is dht_$(ID).status"""
+        """load a list of nodes from `filename`.
+
+        Args:
+          filename (str, optional): filename where the list of known node is load from.
+            default to dht_`id`.status
+        """
         if filename is None:
             myid = str(self.myid).encode("hex")
             filename = "dht_%s.status" % myid
@@ -169,7 +211,11 @@ cdef class DHT_BASE:
             self.threads.append(t)
 
     def is_alive(self):
-        """Test if all threads of the dht are alive, stop the dht if one of the thread is dead"""
+        """Test if all threads of the dht are alive, stop the dht if one of the thread is dead
+
+        Returns:
+          True if all dht threads are alive, False otherwise and stop all threads
+        """
         if self.threads and reduce(lambda x,y: x and y, [t.is_alive() for t in self.threads]):
             return True
         elif not self._threads and self.stoped:
@@ -181,11 +227,24 @@ cdef class DHT_BASE:
         
 
     def debug(self, lvl, msg):
-        """to print msg if lvl > self.debuglvl"""
+        """to print `msg` if `lvl` > `debuglvl`
+
+        Args:
+          lvl (int): minimal level for `debuglvl` to print `msg`
+          msg (str): message to print
+        """
         if lvl <= self.debuglvl:
             print(self.prefix + msg)
 
     def socket_stats(self):
+        """Statistic on send/received messages
+
+        Note:
+            The counter are reset to 0 on each call
+
+        Returns:
+            The couple (number a received, number of sent) messages
+        """
         now = time.time()
         in_s = self.socket_in
         self.socket_in = 0
@@ -214,7 +273,15 @@ cdef class DHT_BASE:
 
 
     def sleep(self, t, fstop=None):
-        """Sleep for t seconds. If the dht is requested to be stop, run fstop and exit"""
+        """Sleep for t seconds. If the dht is requested to be stop, run `fstop` and exit
+
+        Note:
+            Dont use it in the main thread otherwise it can exit before child threads
+
+        Args:
+          fstop (callable, optional): A callable object taking no argument called on dht stop
+             during the sleep
+        """
         if t>0:
             t_int = int(t)
             t_dec = t - t_int
@@ -228,7 +295,17 @@ cdef class DHT_BASE:
 
 
     def announce_peer(self, info_hash, port, delay=0, block=True):
-        """Announce info_hash on port to the K closest node from info_hash found in the dht"""
+        """Announce `info_hash` available on `port` to the K closest nodes from
+           `info_hash` found in the dht
+
+        Args:
+          info_hash (str): A 160bits (20 Bytes) long identifier to announce
+          port (int): tcp port on which `info_hash` if avaible on the current node
+          delay (int, optional): delay in second to wait before starting to look for
+            the K closest nodes into the dht. default ot 0
+          block (bool, optional): wait until the announce in done if True, return immediately
+            otherwise. default ot True.
+        """
         def callback(nodes):
             for node in nodes:
                 try:
@@ -267,7 +344,24 @@ cdef class DHT_BASE:
             self._got_peers[info_hash].popitem(False)
 
     def get_peers(self, hash, delay=0, block=True, callback=None, limit=10):
-        """Return a list of at most 1000 (ip, port) downloading hash or pass-it to callback"""
+        """Return a list of at most 1000 (ip, port) downloading `hash` or pass-it to `callback`
+
+        Note:
+          if `block` is False, the returned list will be most likely empty on the first call
+
+        Args:
+          hash (str): A 160bits (20 Bytes) long identifier to look for peers
+          delay (int, optional): delay in second to wait before starting to look for
+            the K closest nodes into the dht. default ot 0
+          block (bool, optional): wait until the announce in done if True, return immediately
+            otherwise. default ot True.
+          callback (callable, optional): A callable accepting a argument of type list of (str, int)
+            called then peers have been found.
+          limit (int, optional): max number of peer to look for before returning. default to 10.
+
+        Returns:
+            a list of (str, int) peers downloading `hash`
+        """
         peers = None
         if hash in self._got_peers and self._got_peers[hash] and len(self._got_peers[hash])>=limit:
             peers = self._get_peers(hash, compact=False)
@@ -332,10 +426,12 @@ cdef class DHT_BASE:
                     __closest = [node for node in _closest if node not in tried_nodes]
                     
                     if __closest:
-                        node = __closest[0]
-                        # send a get peer to the closest
-                        node.get_peers(self, hash)
-                        tried_nodes.add(node)
+                        # alpha = 3 from the kademlia paper
+                        nodes = __closest[0:3]
+                        # send a get peer to the 3 closest nodes
+                        for node in nodes:
+                            node.get_peers(self, hash)
+                            tried_nodes.add(node)
                         ts = time.time() + 2
                         # we search peers and we found as least limit of them
                         if (typ == "peers" and limit and hash in self._got_peers and self._got_peers[hash] and len(self._got_peers[hash])>=limit):
@@ -378,27 +474,51 @@ cdef class DHT_BASE:
                 del closest
             self.sleep(tosleep, stop)
 
-    def _get_peers(self, info_hash, compact=True):
+    def _get_peers(self, info_hash, compact=True, errno=0):
         """Return peers store locally by remote announce_peer"""
         if not info_hash in self._peers and compact:
             return None
         elif not info_hash in self._got_peers and not compact:
             return None
         else:
-           # In compact mode (to send over udp) return at most 70 peers to avoid udp fragmentation
-           if compact:
-               peers = [(-t,ip,port) for ((ip, port), t) in self._peers[info_hash].items()]
-               # putting the more recent annonces in first
-               peers.sort()
-               return [struct.pack("!4sH", socket.inet_aton(ip), port) for (_, ip, port) in peers[0:70]]
-           else:
-               peers = [(-t,ip,port) for ((ip, port), t) in self._got_peers[info_hash].items()]
-               # putting the more recent annonces in first
-               peers.sort()
-               return [(ip, port) for (_, ip, port) in peers]
+           try:
+               # In compact mode (to send over udp) return at most 70 peers to avoid udp fragmentation
+               if compact:
+                   peers = [(-t,ip,port) for ((ip, port), t) in self._peers[info_hash].items()]
+                   # putting the more recent annonces in first
+                   peers.sort()
+                   return [struct.pack("!4sH", socket.inet_aton(ip), port) for (_, ip, port) in peers[0:70]]
+               else:
+                   peers = [(-t,ip,port) for ((ip, port), t) in self._got_peers[info_hash].items()]
+                   # putting the more recent annonces in first
+                   peers.sort()
+                   return [(ip, port) for (_, ip, port) in peers]
+           except KeyError:
+               if errno > 20:
+                   raise
+               return self._get_peers(info_hash, compact, errno=errno+1)
 
     def get_closest_nodes(self, id, compact=False):
-        """return the current K closest nodes from id"""
+        """return the current K closest nodes from `id`
+
+        Note:
+          Contact information for peers is encoded as a 6-byte string.
+          Also known as "Compact IP-address/port info" the 4-byte IP address
+          is in network byte order with the 2 byte port in network byte order
+          concatenated onto the end.
+          Contact information for nodes is encoded as a 26-byte string.
+          Also known as "Compact node info" the 20-byte Node ID in network byte
+          order has the compact IP-address/port info concatenated to the end.
+
+        Args:
+          id (str): A 160bits (20 Bytes) long identifier to look for closest nodes
+            in the routing table
+          compact (bool, optional): default to False
+
+        Returns:
+          A list of Compact node info if `compact` is True, a list of
+          `Node` instances otherwise.
+        """
         l = list(self.root.get_closest_nodes(id))
         if compact:
             return "".join(n.compact_info() for n in l)
@@ -466,7 +586,12 @@ cdef class DHT_BASE:
                 pass
 
     def sendto(self, msg, addr):
-        """program a msg to be send over the network"""
+        """program a msg to be send over the network
+
+        Args:
+           msg (str): message to be send to
+           addr (tuple of str, port): address to send to
+        """
         self._to_send.put((msg, addr))
 
     def _recv_loop(self):
@@ -655,31 +780,72 @@ cdef class DHT_BASE:
 
 
     def on_error(self, error, query=None):
-        """function called then a query has be responded by an error message. Can safely the overloaded"""
+        """function called then a query has be responded by an error message. Can safely the overloaded
+
+        Args:
+          error (BError): An error instance
+          query (BMessage, optional): query that was reply by an error
+        """
         pass
     def on_ping_response(self, query, response):
-        """function called on a ping response reception. Can safely the overloaded"""
+        """function called on a ping response reception. Can safely the overloaded
+
+        Args:
+          query (BMessage): the sent query object
+          response (BMessage): the received response object
+        """
         pass
     def on_find_node_response(self, query, response):
-        """function called on a find_node response reception. Can safely the overloaded"""
+        """function called on a find_node response reception. Can safely the overloaded
+
+        Args:
+          query (BMessage): the sent query object
+          response (BMessage): the received response object
+        """
         pass
     def on_get_peers_response(self, query, response):
-        """function called on a get_peers response reception. Can safely the overloaded"""
+        """function called on a get_peers response reception. Can safely the overloaded
+
+        Args:
+          query (BMessage): the sent query object
+          response (BMessage): the received response object
+        """
         pass
     def on_announce_peer_response(self, query, response):
-        """function called on a announce_peer response reception. Can safely the overloaded"""
+        """function called on a announce_peer response reception. Can safely the overloaded
+
+        Args:
+          query (BMessage): the sent query object
+          response (BMessage): the received response object
+        """
         pass
     def on_ping_query(self, query):
-        """function called on a ping query reception. Can safely the overloaded"""
+        """function called on a ping query reception. Can safely the overloaded
+
+        Args:
+          query (BMessage): the received query object
+        """
         pass
     def on_find_node_query(self, query):
-        """function called on a find_node query reception. Can safely the overloaded"""
+        """function called on a find_node query reception. Can safely the overloaded
+
+        Args:
+          query (BMessage): the received query object
+        """
         pass
     def on_get_peers_query(self, query):
-        """function called on a get_peers query reception. Can safely the overloaded"""
+        """function called on a get_peers query reception. Can safely the overloaded
+
+        Args:
+          query (BMessage): the received query object
+        """
         pass
     def on_announce_peer_query(self, query):
-        """function called on a announce query reception. Can safely the overloaded"""
+        """function called on a announce query reception. Can safely the overloaded
+
+        Args:
+          query (BMessage): the received query object
+        """
         pass
     def _on_ping_response(self, query, response):
         pass
@@ -782,6 +948,27 @@ class NoTokenError(Exception):
     pass
 
 cdef class Node:
+    """A node of the dht in the routing table
+
+    Note:
+      A good node is a node has responded to one of our queries within the last
+      15 minutes. A node is also good if it has ever responded to one of our
+      queries and has sent us a query within the last 15 minutes. After 15 minutes
+      of inactivity, a node becomes questionable. Nodes become bad when they fail
+      to respond to multiple queries in a row.
+
+    Attributes:
+      id (str): 160bits (20 Bytes) identifier of the node
+      ip (str): ip address of the node in doted notation
+      port (int): port of the node
+      good (bool): True if the node is good
+      bad (bool): True if the node is bad
+      last_response (bool): last response date in secondes since epoch
+      last_query (bool): last query date in secondes since epoch
+      failed (int): number of reponse pending (increse on sending query to the
+        node, set to 0 on reception from the node)
+
+    """
     cdef char _id[20]
     cdef char _ip[4]
     cdef int _port
@@ -790,6 +977,17 @@ cdef class Node:
     cdef int _failed
 
     def __init__(self, id,char* ip,int port, int last_response=0,int last_query=0,int failed=0):
+        """
+        Args:
+          id (str): A 160bits (20 Bytes) identifier
+          ip (str): ip address of the node in doted notation
+          port (int): port of the node
+          last_response (int, optional): last response (secondes since epoch)
+            from the node to one of our query. default is 0
+          last_query (int, optional): last query (secondes since epoch) from
+            the node. default is 0
+          failed (int, optional): number of pending response from the node. default is 0
+        """
         cdef char* cip
         cdef char* cid
         if ip[0] == '0':
@@ -885,6 +1083,24 @@ cdef class Node:
 
     @classmethod
     def from_compact_infos(cls, infos, v=""):
+        """Instancy nodes from multiple compact node info string
+
+        Note:
+          Contact information for peers is encoded as a 6-byte string.
+          Also known as "Compact IP-address/port info" the 4-byte IP address
+          is in network byte order with the 2 byte port in network byte order
+          concatenated onto the end.
+          Contact information for nodes is encoded as a 26-byte string.
+          Also known as "Compact node info" the 20-byte Node ID in network byte
+          order has the compact IP-address/port info concatenated to the end.
+
+        Args:
+          infos (str): a string contening multiple compact node info
+            so its length should be a multiple of 26
+
+        Returns:
+          a list of Node instance
+        """
         nodes = []
         length = len(infos)
         if length/26*26 != length:
@@ -901,6 +1117,24 @@ cdef class Node:
 
     @classmethod
     def from_compact_info(cls, info):
+        """Instancy nodes from multiple compact node info string
+
+        Note:
+          Contact information for peers is encoded as a 6-byte string.
+          Also known as "Compact IP-address/port info" the 4-byte IP address
+          is in network byte order with the 2 byte port in network byte order
+          concatenated onto the end.
+          Contact information for nodes is encoded as a 26-byte string.
+          Also known as "Compact node info" the 20-byte Node ID in network byte
+          order has the compact IP-address/port info concatenated to the end.
+
+        Args:
+          infos (str): a string contening one compact node info
+            so its length should be exactly 26
+
+        Returns:
+          a Node instance
+        """
         if len(info) != 26:
             raise EnvironmentError("compact node info should be 26 chars long")
         (id, ip, port) = struct.unpack("!20s4sH", info)
@@ -922,7 +1156,11 @@ cdef class Node:
         return hash(self.id)
 
     def ping(self, DHT_BASE dht):
-        """send a ping query to the node"""
+        """send a ping query to the node
+
+        Args:
+          dht (DHT_BASE): a dht instance
+        """
         id = str(dht.myid)
         msg = BMessage()
         dht._set_transaction_id(msg)
@@ -934,7 +1172,12 @@ cdef class Node:
         dht.sendto(str(msg), (self.ip, self.port))
 
     def find_node(self, DHT_BASE dht, target):
-        """send a find_node query to the node"""
+        """send a find_node query to the node
+
+        Args:
+          dht (DHT_BASE): a dht instance
+          target (str): the 160bits (20 bytes) target node id
+        """
         id = str(dht.myid)
         target = str(target)
         tl = len(target)
@@ -949,7 +1192,12 @@ cdef class Node:
         dht.sendto(str(msg), (self.ip, self.port))
 
     def get_peers(self, DHT_BASE dht, info_hash):
-        """send a get_peers query to the node"""
+        """send a get_peers query to the node
+
+        Args:
+          dht (DHT_BASE): a dht instance
+          info_hash (str): a 160bits (20 bytes) to get downloading peers
+        """
         id = str(dht.myid)
         info_hash = str(info_hash)
         ihl = len(info_hash)
@@ -964,7 +1212,14 @@ cdef class Node:
         dht.sendto(str(msg), (self.ip, self.port))
 
     def announce_peer(self, DHT_BASE dht, info_hash, int port):
-        """send a announce_peer query to the node"""
+        """send a announce_peer query to the node
+
+        Args:
+          dht (DHT_BASE): a dht instance
+          info_hash (str): a 160bits (20 bytes) hash to announce download
+          port (int): port where data for `info_hash` is avaible
+        """
+
         cdef char* tk
         cdef char* ih
         if self.id in dht.mytoken and (time.time() - dht.mytoken[self.id][1]) < 600:
@@ -987,12 +1242,26 @@ cdef class Node:
             raise NoTokenError()
 
 class Bucket(list):
+    """A bucket of nodes in the routing table
+
+    Attributes:
+       to_refresh (bool): True if the bucket need to be refresh
+       max_size (int): maximun number of element in the bucket
+       last_changed (int): last time the bucket had been updated un secodes
+         since epoch
+    """
     max_size = 8
     last_changed = 0
 
     __slot__ = ("id", "id_length")
 
     def own(self, id):
+        """Args:
+          id (str): a 160bit (20 Bytes) identifier
+
+        Returns:
+          True if `id` is handle by this bucket
+        """
         if id.startswith(self.id[:self.id_length/8]):
             for i in range(self.id_length/8*8, self.id_length):
                 if nbit(self.id, i) !=  nbit(id, i):
@@ -1002,12 +1271,22 @@ class Bucket(list):
             return False
 
     def __init__(self, id="", id_length=0, init=None):
+        """
+        Args:
+          id (str): prefix identifier for the bucket
+          id_length (int): number of signifiant bit in `id`
+            (can also be seen as the length between the root
+            and the bucket in the routing table)
+          init (iterable, optional): some values to store
+            initialy in the bucket
+        """
         self.id = id
         self.id_length = id_length # en bit
         if init:
             super(Bucket, self).__init__(init)
 
     def random_id(self):
+        """return a random id handle by the bucket"""
         id = ID()
         id_length = self.id_length
         id_end = id[id_length/8]
@@ -1029,12 +1308,19 @@ class Bucket(list):
         return ID(self.id[0:id_length/8] + char + id[id_length/8+1:])
 
     def get_node(self, id):
+        """return the node with id `id` or raise NotFound"""
         for n in self:
             if n.id == id:
                 return n
         raise NotFound()
 
     def add(self, dht, node):
+        """Try to add a node to the bucket
+
+        Args:
+          dht (DHT_BASE): a dht instance
+          node (Node): a node instance
+        """
         if not self.own(node.id):
             raise ValueError("Wrong Bucket")
         elif node in self:
@@ -1066,6 +1352,15 @@ class Bucket(list):
             raise BucketFull()
 
     def split(self, rt, dht):
+        """Split the bucket into two buckets
+
+        Args:
+          rt (RoutingTable): a routing table instance
+          dht (DHT_BASE): a dht instance
+
+        Returns:
+          a tuple of two buckets
+        """
         if self.id_length < 8*len(self.id):
             new_id = self.id
         else:
@@ -1086,6 +1381,14 @@ class Bucket(list):
             return (b2, b1)
 
     def merge(self, bucket):
+        """Merge the bucket with `bucket`
+
+        Args:
+          bucket (Bucket): bucket to be merged with
+
+        Returns
+          A merged bucket
+        """
         l = [n for l in zip(self, bucket) for n in l if n.good][:self.max_size]
         return Bucket(id=self.id, id_length=self.id_length - 1, init=l)
 
@@ -1100,9 +1403,17 @@ class NotFound(Exception):
     pass
 
 class RoutingTable(object):
-
+    """
+    Attributs:
+      trie (datrie.Trie): the routing table storage data structure
+      threads (list of Thread): threads of the routing table
+    """
     #__slot__ = ("trie", "_heigth", "split_ids", "info_hash", "last_merge", "lock", "_dhts", "stoped")
-    def __init__(self, bucket=None, debuglvl=0):
+    def __init__(self, debuglvl=0):
+        """
+        Args:
+          debuglvl (int, optional): level of verbosity. default is 0
+        """
         self.debuglvl = debuglvl
         self.trie = datrie.Trie(u"01")
         self.trie[u""]=Bucket()
@@ -1122,10 +1433,12 @@ class RoutingTable(object):
         self.zombie = False
 
     def stop_bg(self):
+        """stop the routing table and return immediately"""
         if not self.stoped:
             Thread(target=self.stop).start()
 
     def stop(self):
+        """stop the routing table and wait for all threads to terminate"""
         if self.stoped:
             self.debug(0, "Already stoped or soping in progress")
             return
@@ -1147,6 +1460,7 @@ class RoutingTable(object):
             self._threads = []
         
     def start(self):
+        """start the routing table"""
         with self.lock:
             if not self.stoped:
                 self.debug(0, "Already started")
@@ -1166,6 +1480,8 @@ class RoutingTable(object):
             self.threads.append(t)
 
     def is_alive(self):
+        """return True if all routing table threads are alive. Otherwire return False
+        and stop the routing table"""
         if self.threads and reduce(lambda x,y: x and y, [t.is_alive() for t in self.threads]):
             return True
         elif not self._threads and self.stoped:
@@ -1176,14 +1492,21 @@ class RoutingTable(object):
             return True
 
     def register_torrent(self, id):
+        """register a torrent `id` (info_hash) for spliting bucket containing this `id`
+
+        Note:
+          torrent can automaticaly be release by a dht instance after a get_peers.
+          For keeping a torrent registered, use the method `register_torrent_longterm`
+        """
         self.info_hash.add(id)
 
     def release_torrent(self, id):
+        """release a torrent `id` (info_hash) and program the routing table to be merged"""
         try:
             self.info_hash.remove(id)
             if not id in self.split_ids:
                 try:
-                    key = self.trie.longest_prefix(self._ides(id))
+                    key = self.trie.longest_prefix(utils.id_to_longid(str(id)))
                     #self._to_merge.add(key)
                 except KeyError:
                     pass
@@ -1214,8 +1537,12 @@ class RoutingTable(object):
                 self._merge()
 
     def register_torrent_longterm(self, id):
+        """Same as register_torrent but garanty that the torrent wont
+        be released automaticaly by the dht
+        """
         self.split_ids.add(id)
     def release_torrent_longterm(self, id):
+        """for releasing torrent registered with the `register_torrent_longterm` method"""
         try:
             self.split_ids.remove(id)
             if not self.need_merge:
@@ -1223,11 +1550,24 @@ class RoutingTable(object):
                 self.need_merge = True
         except KeyError:
             pass
+
     def register_dht(self, dht):
+        """Register a `dht` instance to the routing table
+
+        Note:
+          on start, dht automaticaly register itself to its
+          routing table
+        """
         self._dhts.add(dht)
         self.split_ids.add(dht.myid)
 
     def release_dht(self, dht):
+        """release a `dht` instance to the routing table
+
+        Note:
+          on stop, dht automatially release itself from the
+          routing table
+        """
         try: self._dhts.remove(dht)
         except KeyError:pass
         try: 
@@ -1241,6 +1581,7 @@ class RoutingTable(object):
             self.stop()
 
     def sleep(self, t, fstop=None):
+        """same as sleep on DHT_BASE"""
         if t > 0:
             t_int = int(t)
             t_dec = t - t_int
@@ -1253,6 +1594,7 @@ class RoutingTable(object):
             time.sleep(t_dec)
 
     def debug(self, lvl, msg):
+        """same as debug on DHT_BASE"""
         if lvl <= self.debuglvl:
             print("RT:%s" % msg)
 
@@ -1300,6 +1642,18 @@ class RoutingTable(object):
                 pass
 
     def split(self, dht, id, callback=None):
+        """request for a bucket identified by `id` to be split
+
+        Notes:
+          the routing table cover the entire 160bits space
+
+        Args:
+          dht (DHT_BASE): a dht instance
+          id (str): an 160bits (20 Bytes) id that will be matched to one
+            of the routing table bucket
+          callback (tuple): first element must be callable and further element
+            arguments to pass to the callable.
+        """
         self._to_split.put((dht, id, callback))
 
 
@@ -1309,6 +1663,7 @@ class RoutingTable(object):
         self.trie[u""]=Bucket()
 
     def stats(self):
+        """return the number of nodes, good nodes, bad nodes"""
         nodes = 0
         goods = 0
         bads = 0
@@ -1331,43 +1686,58 @@ class RoutingTable(object):
         return iter(self.trie.values())
 
     def get_node(self, id):
+        """return the node with id `id` or raise `NotFound`"""
         b = self.find(id)
         return b.get_node(id)
 
-    def _ides(self, id):
-        return u"{0:0160b}".format(int(str(id).encode("hex"), 16))
-
-    #def _esif(self, id):
-    #    id = id + u'0'* (160 - len(id))
-    #    return ("%x" % int(id, 2)).decode("hex")
-
-    def find(self, id):
+    def find(self, id, errno=0):
+        """retourn the bucket containing `id`"""
         try:
-            return self.trie.longest_prefix_value(self._ides(id))
-        except KeyError:
-            return self.trie[u""]
+            return self.trie.longest_prefix_value(utils.id_to_longid(str(id)))
+        except KeyError as e:
+            if errno > 0:
+                print("%r:%r" % (id,e))
+            try:
+                return self.trie[u""]
+            except KeyError:
+                if errno < 20:
+                    return self.find(id, errno=errno+1)
+                else:
+                    raise
 
-    def get_closest_nodes(self, id, errno=0):
+    def get_closest_nodes(self, id, bad=False, errno=0):
+        """return the K closest nodes from `id` in the routing table"""
         try:
             id = ID(id)
             nodes = set(n for n in self.find(id) if not n.bad)
             try:
-                prefix = self.trie.longest_prefix(self._ides(id))
+                prefix = self.trie.longest_prefix(utils.id_to_longid(str(id)))
             except KeyError:
                 prefix = u""
             while len(nodes) < Bucket.max_size and prefix:
                 prefix = prefix[:-1]
                 for suffix in self.trie.suffixes(prefix):
-                    nodes = nodes.union(n for n in self.trie[prefix + suffix] if not n.bad)
+                    nodes = nodes.union(n for n in self.trie[prefix + suffix] if bad or not n.bad)
             nodes = list(nodes)
             nodes.sort(key=lambda x:id ^ x.id)
+            # if found less the k good nodes, retrie including bad nodes
+            # it solve the case there connection where temporary lost and
+            # all nodes in the routing table marked as bad
+            if len(nodes) < Bucket.max_size and not bad:
+                return self.get_closest_nodes(id, bad=True, errno=errno)
             return nodes[0:Bucket.max_size]
         except KeyError as e:
             if errno>0:
                 self.debug(1, "get_closest_nodes:%r" % e)
-            return self.get_closest_nodes(id, errno=errno+1)
+            return self.get_closest_nodes(id, bad=bad, errno=errno+1)
 
     def add(self, dht, node):
+        """Add a node the the routing table
+
+        Args:
+          dht (DHT_BASE): a dht instance
+          node (Node): a node instance to be added
+        """
         b = self.find(node.id)
         try:
             b.add(dht, node)
@@ -1378,13 +1748,14 @@ class RoutingTable(object):
                     return
 
     def heigth(self):
+        """height of the tree of the routing table"""
         return self._heigth
 
     def _split(self, dht, id, callback=None):
         #with self.lock:
         try:
             try:
-                prefix = self.trie.longest_prefix(self._ides(id))
+                prefix = self.trie.longest_prefix(utils.id_to_longid(str(id)))
             except KeyError:
                 if u"" in self.trie:
                     prefix = u""
@@ -1402,6 +1773,7 @@ class RoutingTable(object):
 
 
     def merge(self):
+        """Request a merge to be perform"""
         self.need_merge = True
 
     def _merge(self, stack=None):
@@ -1424,7 +1796,7 @@ class RoutingTable(object):
                 continue
             to_merge =  True
             for id in self.split_ids | self.info_hash:
-                if self._ides(id).startswith(key[:-1]):
+                if utils.id_to_longid(str(id)).startswith(key[:-1]):
                     to_merge = False
                     break
             if to_merge:

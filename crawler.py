@@ -20,7 +20,7 @@ class Crawler(DHT):
     def __init__(self, *args, **kwargs):
         super(Crawler, self).__init__(*args, **kwargs)
         if self.master:
-            self.root.client = torrent.Client()
+            self.root.client = torrent.Client(debug=self.debuglvl>0)
         self.db = None
 
     def stop(self):
@@ -189,7 +189,7 @@ class Crawler(DHT):
         try:
             cur = db.cursor()
             cur.execute("SELECT hash FROM torrents WHERE name IS NOT NULL")
-            hashs = set([r[0].decode("hex") for r in cur])
+            hashs = set(r[0].decode("hex") for r in cur)
             self.debug(0, "Returning %s hash to ignore" % len(hashs))
             cur.close()
             db.close()

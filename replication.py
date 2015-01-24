@@ -277,7 +277,7 @@ class Replicator(object):
         poller.register(sock, zmq.POLLIN)
         self.sock.sendto(struct.pack("!1sHH", "b", zport, self.pub_port), (ip, port))
         try:
-            sockets = dict(poller.poll(1000))
+            sockets = dict(poller.poll(5000))
             if sockets and sockets[sock] == zmq.POLLIN:
                 data = json.loads(sock.recv(zmq.NOBLOCK))
                 sock.send("ok")

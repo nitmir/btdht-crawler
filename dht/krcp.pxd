@@ -1,4 +1,5 @@
-
+cdef int _decode_int(char* data, int *i, int max, long long *myint) nogil except -1
+cdef int _decode_string(char* data, int* i, int max, int* j) nogil except -1
 cdef class BMessage:
     cdef char* _y
     cdef int has_y

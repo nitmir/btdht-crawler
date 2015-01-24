@@ -260,7 +260,7 @@ class Client(object):
                             else:
                                 self.init_hash(hash)
                                 if self.debug:
-                                    print "bad metadata"
+                                    print "bad metadata %s != %s" % (hashlib.sha1(metadata).hexdigest(), hash.encode("hex"))
                 except (IndexError, TypeError):
                     pass
             elif msg['msg_type'] == 2:
