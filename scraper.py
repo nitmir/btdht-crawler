@@ -1,7 +1,10 @@
 import binascii, urllib, socket, random, struct
-from dht.utils import bdecode
-from urllib.parse import urlparse, urlunsplit
-
+from btdht.utils import bdecode
+try:
+    from urllib.parse import urlparse, urlunsplit
+except ImportError:
+    from urlparse import urlparse, urlunsplit
+   
 def scrape(tracker, hashes):
 	"""
 	Returns the list of seeds, peers and downloads a torrent info_hash has, according to the specified tracker
