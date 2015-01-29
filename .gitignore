@@ -1,5 +1,6 @@
 *.pyc
 aria2.session
+python-btdht/*
 dht.status
 pyaria2/*
 torrents/*
