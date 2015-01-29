@@ -8,7 +8,7 @@ import math
 import collections
 from threading import Thread
 
-from dht.utils import bencode, bdecode, _bdecode, BcodeError, ID
+from btdht.utils import bencode, bdecode, _bdecode, BcodeError, ID
 
 class MetaDataDownloaded(Exception):
     pass
@@ -40,6 +40,7 @@ class Client(object):
     _socket_ipport = {} # socket -> (ip, port)
     _hash_socket = collections.defaultdict(set) # hash -> socket set
     _peers_socket = {} # (ip, port, hash) -> socket
+    _fd_to_socket = {} # int -> socket
 
     meta_data = {} # hash -> bytes
 
@@ -49,6 +50,7 @@ class Client(object):
 
     def __init__(self, debug=False):
         self.debug = debug
+        self.poll = select.poll()
 
     def stop(self):
         self.stoped = True
@@ -73,22 +75,28 @@ class Client(object):
             if self.stoped:
                 return
             try:
-                sockets, _, _ = select.select(self._socket_hash.keys(), [], [], 1)
-                for s in sockets:
-                    try:
-                        self.recv(s)
-                    except (ToRead, socket.timeout):
-                        pass
-                    except socket.error as e:
-                        if e.errno not in [11]:
+                events = self.poll.poll(1000)
+                #sockets, _, _ = select.select(self._socket_hash.keys(), [], [], 1)
+                for fileno, flag in events:
+                    s = self._fd_to_socket[fileno]
+                    if (flag & (select.POLLIN|select.POLLPRI)):
+                        try:
+                            self.recv(s)
+                        except (ToRead, socket.timeout):
+                            pass
+                        except socket.error as e:
+                            if e.errno not in [11]:
+                                self.clean_socket(s)
+                        except (MetaDataToBig, BcodeError, ValueError, KeyError) as e:
                             self.clean_socket(s)
-                    except (MetaDataToBig, BcodeError, ValueError, KeyError) as e:
+                    elif (flag & (select.POLLERR | select.POLLHUP | select.POLLNVAL)):
+                        print flag
                         self.clean_socket(s)
-            except socket.timeout:
-                raise
             except (socket.error, select.error) as e:
                 if e.args[0] != 9:
                     print e
+            except KeyError:
+                pass
 
     def init_hash(self, hash):
         mps = self.most_probably_size(hash)
@@ -109,6 +117,10 @@ class Client(object):
             rem(self._peers_socket, (ip, port, hash))
         except KeyError:
             pass
+        try: self.poll.unregister(s)
+        except (KeyError, select.error, socket.error): pass
+        try: del self._fd_to_socket[s.fileno()]
+        except (KeyError, socket.error): pass
         rem(self._socket_toread, s)
         rem(self._socket_handshake, s)
         rem(self._socket_hash, s)
@@ -165,11 +177,14 @@ class Client(object):
 
             self._socket_hash[s] = hash
 
+            self._fd_to_socket[s.fileno()]=s
+            self.poll.register(s, select.POLLIN|select.POLLHUP|select.POLLERR|select.POLLNVAL|select.POLLPRI)
             try:
                 self.handshake(s)
                 s.settimeout(0.0)
             except (socket.timeout, socket.error, ValueError, BcodeError) as e:
-                print "handshake fail:%r" % e
+                if self.debug:
+                    print "handshake fail:%r" % e
                 self.clean_socket(s)
                 return False
             return True
