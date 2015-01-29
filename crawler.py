@@ -8,9 +8,9 @@ import socket
 import struct
 import MySQLdb
 import collections
-from threading import Thread
-from dht import DHT, ID, RoutingTable
-from dht.utils import enumerate_ids
+from threading import Thread, Lock
+from btdht import DHT, ID, RoutingTable
+from btdht.utils import enumerate_ids
 
 import config
 import resource
@@ -22,8 +22,11 @@ class Crawler(DHT):
         if self.master:
             self.root.client = torrent.Client(debug=self.debuglvl>0)
         self.db = None
+        self.register_message("get_peers")
+        self.register_message("announce_peer")
 
     def stop(self):
+        self.update_hash(None, None)
         if self.master:
             self.root.client.stoped = True
         super(Crawler, self).stop()
@@ -35,9 +38,11 @@ class Crawler(DHT):
         # doing some initialisation
         if self.master:
             self.root.hash_to_ignore = self.get_hash_to_ignore()
-            self.root.last_update_hash = {}
+            self.root.update_hash = set()
+            self.root.update_hash_lock = Lock()
             self.root.bad_info_hash = {}
             self.root.good_info_hash = {}
+            self.root.last_update_hash = 0
         self.hash_to_fetch = collections.OrderedDict()
         self.hash_to_fetch_tried = collections.defaultdict(set)
         self.hash_to_fetch_totry = collections.defaultdict(set)
@@ -72,7 +77,7 @@ class Crawler(DHT):
                         with open("torrents/%s.torrent.new" % hash.encode("hex"), 'wb') as f:
                             f.write("d4:info%se" % self.root.client.meta_data[hash])
                         os.rename("torrents/%s.torrent.new" % hash.encode("hex"), "torrents/%s.torrent" % hash.encode("hex")) 
-                        self.debug(0, "%s downloaded" % hash.encode("hex"))
+                        self.debug(1, "%s downloaded" % hash.encode("hex"))
                     self.root.client.meta_data[hash] = True
                     self.root.client.clean_hash(hash)
                     self.root.hash_to_ignore.add(hash)
@@ -104,20 +109,22 @@ class Crawler(DHT):
                             except: pass
                             try: del self.hash_to_fetch_totry[hash]
                             except: pass
-                            self.debug(2, "%s failed" % hash.encode("hex"))
+                            self.debug(1, "%s failed" % hash.encode("hex"))
                             del failed_count[hash]
                             del self.root.client.meta_data[hash]
             if not processed:
                 self.sleep(10)
                 
+    def clean(self):
+        if self.master:
+            now = time.time()
+            if now - self.root.last_update_hash > 60:
+                self.update_hash(None, None)
+                self.root.last_update_hash = now
 
     def clean_long(self):
         if self.master:
             now = time.time()
-            for hash in self.root.last_update_hash.keys():
-                if now - self.root.last_update_hash[hash] > 60:
-                    del self.root.last_update_hash[hash]
-
             # cleanng old bad info_hash
             for hash in self.root.bad_info_hash.keys():
                 try:
@@ -137,12 +144,6 @@ class Crawler(DHT):
             self.root.hash_to_ignore = self.get_hash_to_ignore()
 
 
-    def on_error(self, error, query=None):
-        pass
-    def on_ping_response(self, query, response):
-        pass
-    def on_find_node_response(self, query, response):
-        pass
     def on_get_peers_response(self, query, response):
         if response.get("values"):
             info_hash = query.get("info_hash")
@@ -160,12 +161,6 @@ class Crawler(DHT):
                         if not (ip, port) in self.hash_to_fetch_tried[info_hash]:
                             self.hash_to_fetch_totry[info_hash].add((ip, port))
 
-    def on_announce_peer_response(self, query, response):
-        pass
-    def on_ping_query(self, query):
-        pass
-    def on_find_node_query(self, query):
-        pass
     def on_get_peers_query(self, query):
         info_hash = query.get("info_hash")
         if info_hash:
@@ -188,7 +183,7 @@ class Crawler(DHT):
         db = MySQLdb.connect(**config.mysql)
         try:
             cur = db.cursor()
-            cur.execute("SELECT hash FROM torrents WHERE name IS NOT NULL")
+            cur.execute("SELECT hash FROM torrents WHERE created_at IS NOT NULL")
             hashs = set(r[0].decode("hex") for r in cur)
             self.debug(0, "Returning %s hash to ignore" % len(hashs))
             cur.close()
@@ -205,38 +200,39 @@ class Crawler(DHT):
             time.sleep(0.1)
             return self.get_hash_to_ignore(errornb=1+errornb)
         
+
     def update_hash(self, info_hash, get, errornb=0):
         if info_hash in self.root.hash_to_ignore:
             return
-        # Try update a hash at most once every minute
-        if info_hash in self.root.last_update_hash and (time.time() - self.root.last_update_hash[info_hash]) < 60:
-            return
-        if len(info_hash) != 20:
-            raise ProtocolError("", "info_hash should by 20B long")
-        if self.db is None:
-            self.db = MySQLdb.connect(**config.mysql)
-        try:
-            cur = self.db.cursor()
-            if get:
-                cur.execute("INSERT INTO torrents (hash, visible_status, dht_last_get) VALUES (%s,2,NOW()) ON DUPLICATE KEY UPDATE dht_last_get=NOW();",(info_hash.encode("hex"),))
+        with self.root.update_hash_lock:
+            # Try update a hash at most once every 5 minutes
+            if info_hash is not None:
+                self.root.update_hash.add((info_hash, get))
+                return
             else:
-                cur.execute("INSERT INTO torrents (hash, visible_status, dht_last_announce) VALUES (%s,2,NOW()) ON DUPLICATE KEY UPDATE dht_last_announce=NOW();",(info_hash.encode("hex"),))
-            self.db.commit()
+                hashs_get = [h for h,g in self.root.update_hash if g]
+                hashs_announce = [h for h,g in self.root.update_hash if not g]
+                self.root.update_hash = set()
+        query_get = "INSERT INTO torrents (hash, visible_status, dht_last_get) VALUES %s ON DUPLICATE KEY UPDATE dht_last_get=NOW();" % ", ".join("(%s,2,NOW())" for h in hashs_get)
+        query_announce = "INSERT INTO torrents (hash, visible_status, dht_last_announce) VALUES %s ON DUPLICATE KEY UPDATE dht_last_announce=NOW();" % ", ".join("(%s,2,NOW())" for h in hashs_announce)
+        db = MySQLdb.connect(**config.mysql)
+        try:
+            cur = db.cursor()
+            if hashs_get:
+                cur.execute(query_get, tuple(h.encode("hex") for h in hashs_get))
+            if hashs_announce:
+                cur.execute(query_announce, tuple(h.encode("hex") for h in hashs_announce))
+            db.commit()
             cur.close()
-            self.root.last_update_hash[info_hash] = time.time()
+            db.close()
         except (MySQLdb.Error, ) as e:
             try:cur.close()
             except:pass
-            try:self.db.commit()
+            try:db.commit()
             except:pass
-            try:self.db.close()
+            try:db.close()
             except:pass
-            self.db = None
             self.debug(0, "MYSQLERROR: %r, %s" % (e, errornb))
-            if errornb > 10:
-                raise
-            time.sleep(0.1)
-            self.update_hash(info_hash, get, errornb=1+errornb)
 
     def determine_info_hash(self, hash):
         def callback(peers):
@@ -251,7 +247,8 @@ class Crawler(DHT):
 
 def get_id(id_file):
     try:
-        return ID(open(id_file).read(20))
+        with open(id_file) as f:
+            return ID(f.read(20))
     except IOError:
         print("generating new id")
         id = ID()
@@ -262,18 +259,21 @@ def get_id(id_file):
 def lauch(debug, id_file="crawler.id"):
     global stoped
     #resource.setrlimit(resource.RLIMIT_AS, (config.crawler_max_memory, -1)) #limit to one kilobyt
+    resource.setrlimit(resource.RLIMIT_NOFILE, (4096, 4096))
     id_base = get_id(id_file)
 
     pidfile = "%s.pid" % id_file
     try:
-        pid = int(open(pidfile).read().strip())
+        with open(pidfile) as f:
+            pid = int(f.read().strip())
         psutil.Process(pid)
         print("pid %s is alive" % pid)
         return
     except (psutil.NoSuchProcess, IOError):
         pass
     pid = os.getpid()
-    open(pidfile, 'w').write(str(pid))
+    with open(pidfile, 'w') as f:
+        f.write(str(pid))
 
     port_base = config.crawler_base_port
     prefix=1
