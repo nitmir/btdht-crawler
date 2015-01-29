@@ -42,7 +42,7 @@ class Replicator(object):
 
         self.publisher = {}
 
-        from dht import dht
+        from btdht import dht
 
         self.dht = dht.DHT(routing_table=None, bind_port=dht_port)
         self.dht.root.register_torrent_longterm(self.rep_id)
@@ -225,7 +225,7 @@ class Replicator(object):
     def send_torrent(urlhash):
         context = zmq.Context()
         sock = context.socket(zmq.REQ)
-        sock.connect("ipc:///tmp/replication")
+        sock.connect("inproc://replication_%s" % os.getpid())
         msg = json.dumps(urlhash)
         if not isinstance(msg, bytes):
             msg = msg.encode()
@@ -234,7 +234,7 @@ class Replicator(object):
     def init_local_sock(self):
         context = zmq.Context()
         self.local_sock = context.socket(zmq.REP)
-        self.local_sock.bind("ipc:///tmp/replication")
+        self.local_sock.bind("inproc://replication_%s" % os.getpid())
 
     def init_publisher_sock(self):
         context = zmq.Context()
@@ -258,24 +258,39 @@ class Replicator(object):
             if self.stoped:
                 return
             print("Trying %s:%s" % (ip, port))
-            if self.bootstrap_client(ip, port):
-                return True
-            else:
-                print("failed")
-                self._failed_peers[(ip, port)] = time.time()
+            try:
+                if self.bootstrap_client(ip, port):
+                    return True
+                else:
+                    print("failed")
+                    self._failed_peers[(ip, port)] = time.time()
+            except (socket.error, zmq.ZMQError) as e:
+                print("%s" % e)
         return False
 
     def bootstrap_client(self, ip, port):
-        if self.bootstrap_port is None:
-            zport = random.randint(10000,60000)
-        else:
-            zport = self.bootstrap_port
-        context = zmq.Context()
-        sock = context.socket(zmq.REP)
-        sock.bind("tcp://*:%s" % zport)
+        while True:
+            try:
+                if self.bootstrap_port is None:
+                    zport = random.randint(10000,60000)
+                else:
+                    zport = self.bootstrap_port
+                context = zmq.Context()
+                sock = context.socket(zmq.REP)
+                sock.bind("tcp://*:%s" % zport)
+                break
+            except zmq.ZMQError as e:
+                print("%r" % e)
         poller = zmq.Poller()
         poller.register(sock, zmq.POLLIN)
-        self.sock.sendto(struct.pack("!1sHH", "b", zport, self.pub_port), (ip, port))
+        while True:
+            try:
+                self.sock.sendto(struct.pack("!1sHH", "b", zport, self.pub_port), (ip, port))
+                break
+            except socket.error as e:
+                print("%r" % e)
+                if e.errno not in [11, 1]: # 11: Resource temporarily unavailable
+                    return
         try:
             sockets = dict(poller.poll(5000))
             if sockets and sockets[sock] == zmq.POLLIN:
