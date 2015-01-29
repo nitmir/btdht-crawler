@@ -14,7 +14,7 @@ def get_process(file):
             process[file] = psutil.Process(pid)
             return process[file]
         except( psutil.NoSuchProcess, ValueError, IOError) as e:
-            print("%s not found: %s" % (file, e))
+            #print("%s not found: %s" % (file, e))
             return None
 
 
@@ -33,7 +33,7 @@ def loop():
                     if file in stats:
                         if c[0] != stats[file][0] or c[1] != stats[file][1]:
                             stats[file] = (c[0], c[1], time.time(), 0)
-                        elif time.time() - stats[file][2] > 30:
+                        elif time.time() - stats[file][2] > 120:
                             print("%s no activity since 30s, killing" % file)
                             if stats[file][3] < 2:
                                 os.system("kill %s" % p.pid)
