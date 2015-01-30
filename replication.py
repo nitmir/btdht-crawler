@@ -26,7 +26,7 @@ class Replicator(object):
 
     rep_id = '\xe6\xdf\x8e\xcc\x0cc}{\x8b\x02(m\t\xe4\xbc\xb8\nD4\xb5'
 
-    def __init__(self, public_ip, pub_port, priv_port=None, dht_port=None, bootstrap_port=None, on_torrent_announce=None):
+    def __init__(self, public_ip, pub_port, priv_port=None, dht_port=None, bootstrap_port=None, on_torrent_announce=None, debug=False):
         """
          * `public_ip` mst be your ip address as it is seen on the global internet (no local non routable ip here)
          * `pub_port` is a tcp port on wich you will receive message from the swarm
@@ -40,6 +40,7 @@ class Replicator(object):
         `pub_port`, `priv_port` should be stable over time to permit quick restart and consistant data inside the dht
         """
 
+        self.debug = debug
         self.publisher = {}
 
         from btdht import dht
@@ -163,7 +164,8 @@ class Replicator(object):
                     return
 
         if not self._ready:
-            print("Unable to bootstrap, trying again")
+            if self.debug:
+                print("Unable to bootstrap, trying again")
         # trying again until no valid peer found
         while not self._ready and self.get_peers():
             self.bootstrap()
@@ -173,7 +175,8 @@ class Replicator(object):
                     return
 
         if not self._ready:
-            print("Unable to bootstrap, must be first in the swarm")
+            if self.debug:
+                print("Unable to bootstrap, must be first in the swarm")
 
         for i in range(15):
             self.announce()
@@ -199,7 +202,8 @@ class Replicator(object):
 
     def add_publisher(self, ip, pub_port, priv_port):
         if not (ip, pub_port, priv_port) in self.publisher:
-            print((ip, pub_port, priv_port))
+            if self.debug:
+                print((ip, pub_port, priv_port))
             addr = "tcp://%s:%s" % (ip, pub_port)
             self.sub_sock.connect(addr)
             self.pub_sock.send(json.dumps({"q":"add_publisher", "addr":[ip, pub_port, priv_port]}))
@@ -257,12 +261,14 @@ class Replicator(object):
         for ip, port in self.get_peers():
             if self.stoped:
                 return
-            print("Trying %s:%s" % (ip, port))
+            if self.debug:
+                print("Trying %s:%s" % (ip, port))
             try:
                 if self.bootstrap_client(ip, port):
                     return True
                 else:
-                    print("failed")
+                    if self.debug:
+                        print("failed")
                     self._failed_peers[(ip, port)] = time.time()
             except (socket.error, zmq.ZMQError) as e:
                 print("%s" % e)
@@ -323,16 +329,19 @@ class Replicator(object):
                 try:
                     if data[0] == "b":
                         _, port_bootstrap, port_pub = struct.unpack("!1sHH", data)
-                        print("b: %s,%s" % (port_bootstrap, port_pub))
+                        if self.debug:
+                            print("b: %s,%s" % (port_bootstrap, port_pub))
                         test_port(port_bootstrap)
                         test_port(port_pub)
                         self.sock.sendto(struct.pack("!1sH", "d", self.pub_port), addr)
                         self.add_publisher(addr[0], port_pub, addr[1])
-                        print("Send swarm to %s:%s" % (addr[0], port_bootstrap))
+                        if self.debug:
+                            print("Send swarm to %s:%s" % (addr[0], port_bootstrap))
                         self.send_swarm(addr[0], port_bootstrap)
                     elif data[0] == "d":
                         _, port_pub = struct.unpack("!1sH", data)
-                        print("d: %s" % port_pub)
+                        if self.debug:
+                            print("d: %s" % port_pub)
                         test_port(port_pub)
                         self.add_publisher(addr[0], port_pub, addr[1])
                 except (ValueError, struct.error) as e:

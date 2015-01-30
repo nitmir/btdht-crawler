@@ -155,16 +155,16 @@ def insert(new_hashq, pbar):
             db.close()
 
 def get_new_torrent():
-    files = os.listdir("torrents_new/")
+    files = os.listdir(config.torrents_new)
     if not files:
         return
     progress = progressbar.ProgressBar(widgets=widget("new torrents"))
     for f in progress(files):
-        f = "torrents_new/%s" % f
+        f = "%s/%s" % (config.torrents_new, f)
         try:
             torrent = utils.bdecode(open(f, 'rb').read())    
             real_hash = hashlib.sha1(utils.bencode(torrent[b'info'])).hexdigest()
-            os.rename(f, "torrents/%s.torrent" % real_hash)
+            os.rename(f, "%s/%s.torrent" % (config.torrents_dir, real_hash))
         except utils.BcodeError as e:
             pass
 
@@ -173,7 +173,7 @@ def get_hash(db=None, insert_new=False, dir_only=False, name_null=False):
         db = MySQLdb.connect(**config.mysql)          
     cur = db.cursor()
     #query = "SELECT hash FROM torrents WHERE created_at IS NULL AND (dht_last_get >= DATE_SUB(NOW(), INTERVAL 1 HOUR) OR dht_last_announce >= DATE_SUB(NOW(), INTERVAL 1 HOUR) OR %s)"  % " OR ".join("hash=%s" for hash in hashs)
-    files = os.listdir("torrents/")
+    files = os.listdir(config.torrents_dir)
     hashs = [h[:-8] for h in files if h.endswith(".torrent")]
     if insert_new:
         khashs = set()
@@ -221,7 +221,7 @@ def get_hash(db=None, insert_new=False, dir_only=False, name_null=False):
 def get_dir(db=None):
     if db is None:
         db = MySQLdb.connect(**config.mysql)
-    files = os.listdir("torrents/")
+    files = os.listdir(config.torrents_dir)
     hashs = [h[:-8] for h in files if h.endswith(".torrent")]
     cur = db.cursor()
     cur.execute("SELECT hash FROM torrents WHERE created_at IS NULL AND (%s)"  % " OR ".join("hash=%s" for hash in hashs), tuple(hashs))
@@ -281,7 +281,7 @@ def fetch_torrent(db):
     pbar = progressbar.ProgressBar(widgets=widget("torrents fetched"), maxval=count).start()
     counter = [0, 0, 0]
     def load_url(db, cur, hash, notfound, counter):
-        if os.path.isfile("torrents/%s.torrent" % hash):
+        if os.path.isfile("%s/%s.torrent" % (config.torrents_dir, hash)):
             update_db(db, hashs=[hash], quiet=True)
             counter[2]+=1
         else:
@@ -294,7 +294,7 @@ def fetch_torrent(db):
                         bi = io.BytesIO(torrentz)
                         torrent = gzip.GzipFile(fileobj=bi, mode="rb").read()
                         if torrent:
-                            open("torrents/%s.torrent" % hash, 'wb+').write(torrent)
+                            open("%s/%s.torrent" % (config.torrents_dir, hash), 'wb+').write(torrent)
                             #print("Found %s on torcache" % hash)
                             update_db(db, hashs=[hash], torcache=True, quiet=True)
                             replicator.announce_torrent(hash, url)
@@ -354,18 +354,7 @@ def fetch_torrent(db):
     return notfound
 
 
-def find_wrong_hash():
-    hashs = [h[:-8] for h in os.listdir("torrents_archives/2015-01-22/") if h.endswith(".torrent")]
-    progress = progressbar.ProgressBar(widgets=widget("torrents"))
-    for hash in progress(hashs):
-        torrent = get_torrent(None, hash, "torrents_archives/2015-01-22")
-        if torrent and torrent[b'info'][b'pieces']:
-            real_hash = hashlib.sha1(utils.bencode(torrent[b'info'])).hexdigest()
-            if real_hash != hash:
-                print("\rWrong torrent hash %s --> %s" % (hash, real_hash))
-                os.rename("torrents_archives/2015-01-22/%s.torrent" % hash, "torrents/%s.torrent" % real_hash)
-
-def get_torrent(db, hash, base_path="torrents"):
+def get_torrent(db, hash, base_path=config.torrents_dir):
     global downloading, failed
     if hash in failed:
         return None
@@ -512,7 +501,7 @@ def update_db_torrent(db, cur, hash, torrent, id=None, torcache=None, quiet=Fals
             cur.execute("UPDATE torrents SET hash=%s WHERE hash=%s", (real_hash, hash))
         except MySQLdb.IntegrityError:
             cur.execute("DELETE FROM torrents WHERE hash=%s", (hash,))
-        os.rename("torrents/%s.torrent" % hash, "torrents/%s.torrent" % real_hash)
+        os.rename("%s/%s.torrent" % (config.torrents_dir, hash), "%s/%s.torrent" % (config.torrents_dir, real_hash))
         #update_db_torrent(db, cur, real_hash, torrent, torcache=torcache)
 
 
@@ -532,7 +521,7 @@ def update_db(db=None, hashs=None, torcache=None, quiet=False):
         print("Update db")
     try:
         for hash in hashs:
-            if os.path.isfile("torrents/%s.torrent" % hash) and not hash in failed:
+            if os.path.isfile("%s/%s.torrent" % (config.torrents_dir, hash)) and not hash in failed:
                 t = get_torrent(db, hash)
                 if t is None:
                     continue
@@ -544,7 +533,7 @@ def update_db(db=None, hashs=None, torcache=None, quiet=False):
 def clean_files(db=None):
     if db is None:
         db = MySQLdb.connect(**config.mysql)
-    files = os.listdir("torrents/")
+    files = os.listdir(config.torrents_dir)
     hashs = [h[:-8] for h in files if h.endswith(".torrent")]
     cur = db.cursor()
     i=0
@@ -561,7 +550,7 @@ def clean_files(db=None):
         #print("  %s entrée trouvé" % len(hashs))
         c=i
         for hash in db_hashs:
-            os.rename("torrents/%s.torrent" % hash, "torrents_done/%s.torrent" % hash)
+            os.rename("%s/%s.torrent" % (config.torrents_dir, hash), "%s/%s.torrent" % (config.torrents_done, hash))
             #print("    %s renamed" % hash)
             c+=1
             pbar.update(c)
@@ -574,12 +563,12 @@ def compact_torrent(db=None):
     """SUpprime les info des block du torrent"""
     if db is None:
         db = MySQLdb.connect(**config.mysql)
-    files = os.listdir("torrents_done/")
+    files = os.listdir(config.torrents_done)
     hashs = [h[:-8] for h in files if h.endswith(".torrent")]
     cur = db.cursor()
     i=0
     step=500
-    archive_path = "torrents_archives/%s/" % time.strftime("%Y-%m-%d")
+    archive_path = "%s/%s/" % (config.torrents_archive, time.strftime("%Y-%m-%d"))
     try: os.mkdir(archive_path)
     except OSError as e:
         if e.errno != 17: # file exist
@@ -597,13 +586,13 @@ def compact_torrent(db=None):
         c=i
         for hash, torcache in db_hashs.items():
             if torcache == 1:
-                torrent = get_torrent(db, hash, base_path="torrents_done")
+                torrent = get_torrent(db, hash, base_path=config.torrents_done)
                 torrent[b'info'][b'pieces'] = b''
                 with open("%s%s.torrent" % (archive_path, hash), 'wb+') as f:
                     f.write(utils.bencode(torrent))
-                os.remove("torrents_done/%s.torrent" % hash)
+                os.remove("%s/%s.torrent" % (config.torrents_done, hash))
             else:
-                os.rename("torrents_done/%s.torrent" % hash, "%s%s.torrent" % (archive_path, hash))
+                os.rename("%s/%s.torrent" % (config.torrents_done, hash), "%s%s.torrent" % (archive_path, hash))
             c+=1
             pbar.update(c)
             #print("    %s compacted" % hash)
@@ -623,7 +612,7 @@ def loop():
     # notfound = fetch_torrent(db)
     # feed_torcache(db)
     last_loop = 0
-    loop_interval = 600
+    loop_interval = 300
     replicator.start()
     while True:
         try:
@@ -677,7 +666,7 @@ def loop():
             db.close()
 
 def upload_to_torcache(db, hash, quiet=False):
-    files = {'torrent': open("torrents/%s.torrent" % hash, 'rb')}
+    files = {'torrent': open("%s/%s.torrent" % (config.torrents_dir, hash), 'rb')}
     r = requests.post('http://torcache.net/autoupload.php', files=files)
     cur = db.cursor()
     try:
@@ -718,7 +707,7 @@ def feed_torcache(db, hashs=None):
             while True:
                 hash = hashsq.get(timeout=0)
                 tc = is_torcache(hash)
-                if not tc and os.path.isfile("torrents/%s.torrent" % hash):
+                if not tc and os.path.isfile("%s/%s.torrent" % (config.torrents_dir, hash)):
                     #t = get_torrent(db, hash)
                     try:
                         upload_to_torcache(db, hash, quiet=True)

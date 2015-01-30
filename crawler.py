@@ -72,11 +72,11 @@ class Crawler(DHT):
             for hash in self.hash_to_fetch.keys():
                 if self.stoped:
                     return
-                if hash in self.root.client.meta_data or os.path.isfile("torrents/%s.torrent" % hash.encode("hex")):
+                if hash in self.root.client.meta_data or os.path.isfile("%s/%s.torrent" % (config.torrents_dir, hash.encode("hex"))):
                     if hash in self.root.client.meta_data and self.root.client.meta_data[hash] is not True:
-                        with open("torrents/%s.torrent.new" % hash.encode("hex"), 'wb') as f:
+                        with open("%s/%s.torrent.new" % (config.torrents_dir, hash.encode("hex")), 'wb') as f:
                             f.write("d4:info%se" % self.root.client.meta_data[hash])
-                        os.rename("torrents/%s.torrent.new" % hash.encode("hex"), "torrents/%s.torrent" % hash.encode("hex")) 
+                        os.rename("%s/%s.torrent.new" % (config.torrents_dir, hash.encode("hex")), "%s/%s.torrent" % (config.torrents_dir, hash.encode("hex"))) 
                         self.debug(1, "%s downloaded" % hash.encode("hex"))
                     self.root.client.meta_data[hash] = True
                     self.root.client.clean_hash(hash)
@@ -183,8 +183,8 @@ class Crawler(DHT):
         db = MySQLdb.connect(**config.mysql)
         try:
             cur = db.cursor()
-            cur.execute("SELECT hash FROM torrents WHERE created_at IS NOT NULL")
-            hashs = set(r[0].decode("hex") for r in cur)
+            cur.execute("SELECT UNHEX(hash) FROM torrents WHERE created_at IS NOT NULL")
+            hashs = set(r[0] for r in cur)
             self.debug(0, "Returning %s hash to ignore" % len(hashs))
             cur.close()
             db.close()
@@ -213,15 +213,15 @@ class Crawler(DHT):
                 hashs_get = [h for h,g in self.root.update_hash if g]
                 hashs_announce = [h for h,g in self.root.update_hash if not g]
                 self.root.update_hash = set()
-        query_get = "INSERT INTO torrents (hash, visible_status, dht_last_get) VALUES %s ON DUPLICATE KEY UPDATE dht_last_get=NOW();" % ", ".join("(%s,2,NOW())" for h in hashs_get)
-        query_announce = "INSERT INTO torrents (hash, visible_status, dht_last_announce) VALUES %s ON DUPLICATE KEY UPDATE dht_last_announce=NOW();" % ", ".join("(%s,2,NOW())" for h in hashs_announce)
+        query_get = "INSERT INTO torrents (hash, visible_status, dht_last_get) VALUES %s ON DUPLICATE KEY UPDATE dht_last_get=NOW();" % ", ".join("(LOWER(HEX(%s)),2,NOW())" for h in hashs_get)
+        query_announce = "INSERT INTO torrents (hash, visible_status, dht_last_announce) VALUES %s ON DUPLICATE KEY UPDATE dht_last_announce=NOW();" % ", ".join("(LOWER(HEX(%s)),2,NOW())" for h in hashs_announce)
         db = MySQLdb.connect(**config.mysql)
         try:
             cur = db.cursor()
             if hashs_get:
-                cur.execute(query_get, tuple(h.encode("hex") for h in hashs_get))
+                cur.execute(query_get, hashs_get)
             if hashs_announce:
-                cur.execute(query_announce, tuple(h.encode("hex") for h in hashs_announce))
+                cur.execute(query_announce, hashs_announce)
             db.commit()
             cur.close()
             db.close()

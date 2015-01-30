@@ -46,7 +46,7 @@ def loop():
                                 stats[file]=stats[file][0:3] + (stats[file][3] + 1, )
                     else:
                         stats[file] = (c[0], c[1], time.time(), 0)
-                except psutil.AccessDenied:
+                except (psutil.AccessDenied, psutil.NoSuchProcess):
                     pass
             else:
                 if file in stats:
