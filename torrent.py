@@ -178,8 +178,8 @@ class Client(object):
             self._socket_hash[s] = hash
 
             self._fd_to_socket[s.fileno()]=s
-            self.poll.register(s, select.POLLIN|select.POLLHUP|select.POLLERR|select.POLLNVAL|select.POLLPRI)
             try:
+                self.poll.register(s, select.POLLIN|select.POLLHUP|select.POLLERR|select.POLLNVAL|select.POLLPRI)
                 self.handshake(s)
                 s.settimeout(0.0)
             except (socket.timeout, socket.error, ValueError, BcodeError) as e:
