@@ -24,3 +24,5 @@ torrents_archive = "torrents_archives/"
 torrents_new = "torrents_new/"
 
 public_ip = "1.2.3.4"
+
+scrape_interval = 60 # in minute, set 0 to disable scraping

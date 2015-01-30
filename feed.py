@@ -101,8 +101,10 @@ def last_timestamp(self):
 def scrape(db=None):
     if db is None:
         db = MySQLdb.connect(**config.mysql)
+    if config.scrape_interval <= 0:
+        return
     cur = db.cursor()
-    query = "SELECT COUNT(id) FROM torrents WHERE created_at IS NOT NULL AND (scrape_date IS NULL OR scrape_date <= DATE_SUB(NOW(), INTERVAL 60 MINUTE)) ORDER BY scrape_date ASC"
+    query = "SELECT COUNT(id) FROM torrents WHERE created_at IS NOT NULL AND (scrape_date IS NULL OR scrape_date <= DATE_SUB(NOW(), INTERVAL %d MINUTE)) ORDER BY scrape_date ASC" % config.scrape_interval
     cur.execute(query)
     ret = [r[0] for r in cur]
     count=ret[0]
@@ -114,7 +116,7 @@ def scrape(db=None):
 
     if count <= 0:
         return
-    query = "SELECT hash FROM torrents WHERE created_at IS NOT NULL AND (scrape_date IS NULL OR scrape_date <= DATE_SUB(NOW(), INTERVAL 60 MINUTE)) ORDER BY scrape_date ASC"
+    query = "SELECT hash FROM torrents WHERE created_at IS NOT NULL AND (scrape_date IS NULL OR scrape_date <= DATE_SUB(NOW(), INTERVAL %d MINUTE)) ORDER BY scrape_date ASC" % config.scrape_interval
     db2 = MySQLdb.connect(**config.mysql)
     cur2 = db2.cursor()
     cur2.execute(query)
