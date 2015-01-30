@@ -22,13 +22,17 @@ import scraper
 from btdht import utils
 from replication import Replicator
 
-db = MySQLdb.connect(**config.mysql)
-cur = db.cursor()
-query = "SELECT hash FROM torrents WHERE created_at IS NOT NULL"
-cur.execute(query)
-hash_to_ignore = set(r[0] for r in cur)
-cur.close()
-db.close()
+hash_to_ignore = set()
+
+def update_hash_to_ignore(db=None):
+    global hash_to_ignore
+    if db is None:
+        db = MySQLdb.connect(**config.mysql)
+    cur = db.cursor()
+    query = "SELECT hash FROM torrents WHERE created_at IS NOT NULL"
+    cur.execute(query)
+    hash_to_ignore = set(r[0] for r in cur)
+    cur.close()
 
 def on_torrent_announce(hash, url):
     global hash_to_ignore
@@ -58,6 +62,7 @@ def on_torrent_announce(hash, url):
                     torrent = gzip.GzipFile(fileobj=bi, mode="rb").read()
                     if torrent:
                         open("%s/%s.torrent" % (config.torrents_new, hash), 'wb+').write(torrent)
+                        hash_to_ignore.add(hash)
                     else:
                         print("Got empty response from torcache %s" % url)
                 except (gzip.zlib.error, OSError) as e:
@@ -304,15 +309,7 @@ def clean(db, hashs=None):
     query = "DELETE FROM torrents WHERE created_at IS NULL AND (dht_last_get < DATE_SUB(NOW(), INTERVAL 1 HOUR) OR dht_last_get IS NULL) AND (dht_last_announce < DATE_SUB(NOW(), INTERVAL 1 HOUR) OR dht_last_announce IS NULL)"
     cur.execute(query)
     db.commit()
-    if hashs is None:
-        hid = get_hash(db)
-        if hid:
-            hashs = set(list(zip(*hid))[0])
-        else:
-            hashs = []
-    if not hashs:
-        return
-
+    update_hash_to_ignore(db)
 
 def is_torcache(hash):
     resp = requests.head("http://torcache.net/torrent/%s.torrent" % hash.upper())
