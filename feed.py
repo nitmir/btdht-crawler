@@ -652,9 +652,10 @@ def compact_torrent(db=None):
     pbar.finish()
     
 def loop():
-    last_clean = 0
+    last_clean = time.time()
     sql_error = False
     db = MySQLdb.connect(**config.mysql)
+    update_hash_to_ignore(db)
     #init_scrape_table(db)
     #update_db(db)
     db.commit()
