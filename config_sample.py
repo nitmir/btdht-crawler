@@ -17,3 +17,9 @@ crawler_instance = 3  # 8 instances
 
 # max virtual memory in byte
 crawler_max_memory = 4 * 1024 * 1024 * 1024 # 4GB
+
+torrents_dir = "torrents/"
+torrents_done = "torrents_done/"
+torrents_archive = "torrents_archives/"
+torrents_new = "torrents_new/"
+
