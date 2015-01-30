@@ -331,6 +331,8 @@ def fetch_torrent(db):
     notfound = set()
     cur = db.cursor()
     count = hashs.qsize()
+    if count <= 0:
+        return
     pbar = progressbar.ProgressBar(widgets=widget("torrents fetched"), maxval=count).start()
     counter = [0, 0, 0]
     def load_url(db, cur, hash, notfound, counter):
