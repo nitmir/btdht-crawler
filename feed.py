@@ -77,8 +77,10 @@ def on_torrent_announce(hash, url):
     
 replicator = Replicator(config.public_ip, 5004, on_torrent_announce=on_torrent_announce)
 
-def announce(hash, url):
+def announce(hash, url=None):
     if not hash in hash_to_ignore:
+        if url is None:
+            url = "http://torcache.net/torrent/%s.torrent" % hash.upper()
         hash_to_ignore.add(hash)
         replicator.announce_torrent(hash, url)
 socket.setdefaulttimeout(3)
@@ -352,7 +354,6 @@ def fetch_torrent(db):
                             open("%s/%s.torrent" % (config.torrents_dir, hash), 'wb+').write(torrent)
                             #print("Found %s on torcache" % hash)
                             update_db(db, hashs=[hash], torcache=True, quiet=True)
-                            announce(hash, url)
                             counter[0]+=1
                         else:
                             print("Got empty response from torcache %s" % url)
@@ -599,12 +600,14 @@ def clean_files(db=None):
     pbar = progressbar.ProgressBar(widgets=widget("files cleaned"), maxval=count).start()
     while hashs[i:i+step]:
         #print("processing %s files" % len(hashs))
-        query = "SELECT hash FROM torrents WHERE created_at IS NOT NULL AND (%s)" % " OR ".join("hash=%s" for hash in hashs[i:i+step])
+        query = "SELECT hash, torcache FROM torrents WHERE created_at IS NOT NULL AND (%s)" % " OR ".join("hash=%s" for hash in hashs[i:i+step])
         cur.execute(query, tuple(hashs[i:i+step]))
-        db_hashs = [r[0] for r in cur]
+        db_hashs = [(r[0], r[1]) for r in cur]
         #print("  %s entrée trouvé" % len(hashs))
         c=i
-        for hash in db_hashs:
+        for hash, torcache in db_hashs:
+            if torcache == 1:
+                announce(hash)
             os.rename("%s/%s.torrent" % (config.torrents_dir, hash), "%s/%s.torrent" % (config.torrents_done, hash))
             #print("    %s renamed" % hash)
             c+=1
@@ -691,9 +694,6 @@ def loop():
             #    _=get_torrent(db, h)
             #update_db(db)
             #feed_torcache(db)
-            if time.time() - last_clean > 60*15:
-                clean(db)
-                last_clean = time.time()
             scrape(db)
             db.commit()
             db.close()
@@ -710,6 +710,9 @@ def loop():
             db = MySQLdb.connect(**config.mysql)
             clean_files(db)
             compact_torrent(db)
+            if time.time() - last_clean > 60*15:
+                clean(db)
+                last_clean = time.time()
             db.commit()
             sql_error = False
         except socket.timeout:
@@ -738,7 +741,6 @@ def upload_to_torcache(db, hash, quiet=False):
             cur.execute("UPDATE torrents SET torcache=%s WHERE hash=%s", (True, hash))
             if not quiet:
                 print("Uploaded %s to torcache" % hash)
-            announce(hash, ("http://torcache.net/torrent/%s.torrent" % hash.upper()))
         elif 'X-Torrage-Infohash' in r.headers:
             print("Bad hash %s -> %s" % (hash, r.headers.get('X-Torrage-Infohash').lower()))
             update_db(db, [hash], quiet=True)
@@ -776,7 +778,6 @@ def feed_torcache(db, hashs=None):
                         hashsq.put(hash)
                 elif tc:
                     cur.execute("UPDATE torrents SET torcache=%s WHERE hash=%s", (True, hash))
-                    announce(hash, ("http://torcache.net/torrent/%s.torrent" % hash.upper()))
                     counter[0]+=1
                 else:
                     cur.execute("UPDATE torrents SET torcache=%s WHERE hash=%s", (False, hash))
