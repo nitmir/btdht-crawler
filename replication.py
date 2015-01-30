@@ -180,6 +180,7 @@ class Replicator(object):
 
         for i in range(15):
             self.announce()
+        self._ready = True
         next_announce = time.time()
         next_bootstrap = time.time()
         while True:

@@ -23,3 +23,4 @@ torrents_done = "torrents_done/"
 torrents_archive = "torrents_archives/"
 torrents_new = "torrents_new/"
 
+public_ip = "1.2.3.4"

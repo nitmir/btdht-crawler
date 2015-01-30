@@ -22,7 +22,55 @@ import scraper
 from btdht import utils
 from replication import Replicator
 
-replicator = Replicator("188.165.207.160", 5004, on_torrent_announce=lambda x,y:x)
+db = MySQLdb.connect(**config.mysql)
+cur = db.cursor()
+query = "SELECT hash FROM torrents WHERE created_at IS NOT NULL"
+cur.execute(query)
+hash_to_ignore = set(r[0] for r in cur)
+cur.close()
+db.close()
+
+def on_torrent_announce(hash, url):
+    global hash_to_ignore
+    print("doing %s" % hash)
+    if not url.startswith("http://torcache.net/"):
+        print("not on torcache")
+        return
+    if len(hash) != 40:
+        print("hash len invalid")
+        return
+    try:
+        hash.decode("hex")
+    except TypeError:
+        print("hash is not hex")
+        return
+    hash = hash.lower()
+    if hash in hash_to_ignore:
+        print("hash already done")
+        return
+    def load_url(url, hash):
+        try:
+            response = urllib2.urlopen(url)
+            torrentz = response.read()
+            if torrentz:
+                try:
+                    bi = io.BytesIO(torrentz)
+                    torrent = gzip.GzipFile(fileobj=bi, mode="rb").read()
+                    if torrent:
+                        open("%s/%s.torrent" % (config.torrents_new, hash), 'wb+').write(torrent)
+                    else:
+                        print("Got empty response from torcache %s" % url)
+                except (gzip.zlib.error, OSError) as e:
+                    print("%r" % e)
+            else:
+                print("Got empty response from torcache %s" % url)
+        except urllib2.HTTPError:
+            pass
+        except (EOFError,) as e:
+            print("Error on %s: %r" % (hash, e))
+    load_url(url, hash)
+    
+replicator = Replicator(config.public_ip, 5004, on_torrent_announce=on_torrent_announce)
 socket.setdefaulttimeout(3)
 
 def widget(what=""):
@@ -164,6 +212,7 @@ def get_new_torrent():
         try:
             torrent = utils.bdecode(open(f, 'rb').read())    
             real_hash = hashlib.sha1(utils.bencode(torrent[b'info'])).hexdigest()
+            hash_to_ignore.add(real_hash)
             os.rename(f, "%s/%s.torrent" % (config.torrents_dir, real_hash))
         except utils.BcodeError as e:
             pass
@@ -204,7 +253,7 @@ def get_hash(db=None, insert_new=False, dir_only=False, name_null=False):
             finally:
                 pbar.finish()
     if dir_only:
-        if name_null:
+        if name_null and hashs:
             query = "SELECT hash FROM torrents WHERE created_at IS NULL AND (%s)"  % " OR ".join("hash=%s" for hash in hashs)
             cur.execute(query, tuple(hashs))
             ret = [r[0] for r in cur]
@@ -297,6 +346,7 @@ def fetch_torrent(db):
                             open("%s/%s.torrent" % (config.torrents_dir, hash), 'wb+').write(torrent)
                             #print("Found %s on torcache" % hash)
                             update_db(db, hashs=[hash], torcache=True, quiet=True)
+                            hash_to_ignore.add(hash)
                             replicator.announce_torrent(hash, url)
                             counter[0]+=1
                         else:
@@ -614,6 +664,10 @@ def loop():
     last_loop = 0
     loop_interval = 300
     replicator.start()
+    while not replicator._ready:
+        print("replicator not ready")
+        time.sleep(10)
+
     while True:
         try:
             last_loop = time.time()
@@ -678,6 +732,7 @@ def upload_to_torcache(db, hash, quiet=False):
             cur.execute("UPDATE torrents SET torcache=%s WHERE hash=%s", (True, hash))
             if not quiet:
                 print("Uploaded %s to torcache" % hash)
+            hash_to_ignore.add(hash)
             replicator.announce_torrent(hash, ("http://torcache.net/torrent/%s.torrent" % hash.upper()))
         elif 'X-Torrage-Infohash' in r.headers:
             print("Bad hash %s -> %s" % (hash, r.headers.get('X-Torrage-Infohash').lower()))
@@ -716,6 +771,7 @@ def feed_torcache(db, hashs=None):
                         hashsq.put(hash)
                 elif tc:
                     cur.execute("UPDATE torrents SET torcache=%s WHERE hash=%s", (True, hash))
+                    hash_to_ignore.add(hash)
                     replicator.announce_torrent(hash, ("http://torcache.net/torrent/%s.torrent" % hash.upper()))
                     counter[0]+=1
                 else:
