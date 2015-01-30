@@ -203,9 +203,9 @@ def insert(new_hashq, pbar):
             while True:
                 hash = new_hashq.get(timeout=0)
                 if is_torcache(hash):
-                    cur.execute("INSERT INTO torrents (hash,dht_last_get,torcache) VALUES (%s,NOW(),%s)",(hash, True))
+                    cur.execute("INSERT INTO torrents (hash,dht_last_get,torcache) VALUES (%s,NOW(),%s) ON DUPLICATE KEY UPDATE hash=LOWER(VALUES(hash))",(hash, True))
                 else:
-                    cur.execute("INSERT INTO torrents (hash,dht_last_get) VALUES (%s,NOW())",(hash,))
+                    cur.execute("INSERT INTO torrents (hash,dht_last_get) VALUES (%s,NOW()) ON DUPLICATE KEY UPDATE hash=LOWER(VALUES(hash))",(hash,))
                 pbar.update(pbar.currval+1)
         except queue.Empty:
             pass
