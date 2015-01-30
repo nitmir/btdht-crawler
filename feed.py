@@ -69,7 +69,7 @@ def on_torrent_announce(hash, url):
                     print("%r" % e)
             else:
                 print("Got empty response from torcache %s" % url)
-        except urllib2.HTTPError:
+        except (urllib2.HTTPError, socket.error):
             pass
         except (EOFError,) as e:
             print("Error on %s: %r" % (hash, e))
