@@ -76,6 +76,11 @@ def on_torrent_announce(hash, url):
     load_url(url, hash)
     
 replicator = Replicator(config.public_ip, 5004, on_torrent_announce=on_torrent_announce)
+
+def announce(hash, url):
+    if not hash in hash_to_ignore:
+        hash_to_ignore.add(hash)
+        replicator.announce_torrent(hash, url)
 socket.setdefaulttimeout(3)
 
 def widget(what=""):
@@ -343,8 +348,7 @@ def fetch_torrent(db):
                             open("%s/%s.torrent" % (config.torrents_dir, hash), 'wb+').write(torrent)
                             #print("Found %s on torcache" % hash)
                             update_db(db, hashs=[hash], torcache=True, quiet=True)
-                            hash_to_ignore.add(hash)
-                            replicator.announce_torrent(hash, url)
+                            announce(hash, url)
                             counter[0]+=1
                         else:
                             print("Got empty response from torcache %s" % url)
@@ -729,8 +733,7 @@ def upload_to_torcache(db, hash, quiet=False):
             cur.execute("UPDATE torrents SET torcache=%s WHERE hash=%s", (True, hash))
             if not quiet:
                 print("Uploaded %s to torcache" % hash)
-            hash_to_ignore.add(hash)
-            replicator.announce_torrent(hash, ("http://torcache.net/torrent/%s.torrent" % hash.upper()))
+            announce(hash, ("http://torcache.net/torrent/%s.torrent" % hash.upper()))
         elif 'X-Torrage-Infohash' in r.headers:
             print("Bad hash %s -> %s" % (hash, r.headers.get('X-Torrage-Infohash').lower()))
             update_db(db, [hash], quiet=True)
@@ -768,8 +771,7 @@ def feed_torcache(db, hashs=None):
                         hashsq.put(hash)
                 elif tc:
                     cur.execute("UPDATE torrents SET torcache=%s WHERE hash=%s", (True, hash))
-                    hash_to_ignore.add(hash)
-                    replicator.announce_torrent(hash, ("http://torcache.net/torrent/%s.torrent" % hash.upper()))
+                    announce(hash, ("http://torcache.net/torrent/%s.torrent" % hash.upper()))
                     counter[0]+=1
                 else:
                     cur.execute("UPDATE torrents SET torcache=%s WHERE hash=%s", (False, hash))
