@@ -32,7 +32,7 @@ db.close()
 
 def on_torrent_announce(hash, url):
     global hash_to_ignore
-    print("doing %s" % hash)
+    #print("doing %s" % hash)
     if not url.startswith("http://torcache.net/"):
         print("not on torcache")
         return
@@ -46,7 +46,7 @@ def on_torrent_announce(hash, url):
         return
     hash = hash.lower()
     if hash in hash_to_ignore:
-        print("hash already done")
+        #print("hash already done")
         return
     def load_url(url, hash):
         try:
