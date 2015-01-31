@@ -8,6 +8,7 @@ import socket
 import struct
 import MySQLdb
 import collections
+import multiprocessing
 from threading import Thread, Lock
 from btdht import DHT, ID, RoutingTable
 from btdht.utils import enumerate_ids
@@ -256,8 +257,9 @@ def get_id(id_file):
             f.write(str(id))
         return id
 
-def lauch(debug, id_file="crawler.id"):
+def lauch(debug, id_file="crawler.id", lprefix=""):
     global stoped
+    print "lauch %s" % id_file
     #resource.setrlimit(resource.RLIMIT_AS, (config.crawler_max_memory, -1)) #limit to one kilobyt
     resource.setrlimit(resource.RLIMIT_NOFILE, (4096, 4096))
     id_base = get_id(id_file)
@@ -278,13 +280,13 @@ def lauch(debug, id_file="crawler.id"):
     port_base = config.crawler_base_port
     prefix=1
     routing_table = RoutingTable(debuglvl=debug)
-    dht_base = Crawler(bind_port=port_base + ord(id_base[0]), id=id_base, debuglvl=debug, prefix="%02d:" % prefix, master=True, routing_table=routing_table)
+    dht_base = Crawler(bind_port=port_base + ord(id_base[0]), id=id_base, debuglvl=debug, prefix="%s%02d:" % (lprefix, prefix), master=True, routing_table=routing_table)
     liveness = [routing_table, dht_base]
     for id in enumerate_ids(config.crawler_instance, id_base):
         if id == id_base:
             continue
         prefix+=1
-        liveness.append(Crawler(bind_port=port_base + ord(id[0]), id=ID(id), routing_table=routing_table, debuglvl=debug, prefix="%02d:" % prefix))
+        liveness.append(Crawler(bind_port=port_base + ord(id[0]), id=ID(id), routing_table=routing_table, debuglvl=debug, prefix="%s%02d:" % (lprefix, prefix)))
 
     stoped = False
     try:
@@ -326,9 +328,68 @@ def stop(liveness):
         time.sleep(1)
         s = [t for t in s if t.is_alive()]
 
+
+def worker(debug):
+    jobs = {}
+    try:
+        for i in range(1, config.crawler_worker + 1):
+            jobs[i]=multiprocessing.Process(target=lauch, args=(debug, "crawler%s.id" % i, "W%s:" % i))
+            jobs[i].start()
+        stats={}
+        mem={}
+        while True:
+            for i, p in jobs.items():
+
+                # watch if the process has done some io
+                try:
+                    pp = psutil.Process(p.pid)
+                    mem[i] = pp.memory_info().rss
+                    c = pp.io_counters()
+                    if i in stats:
+                        if c[0] != stats[i][0] or c[1] != stats[i][1]:
+                            stats[i] = (c[0], c[1], time.time(), 0)
+                        # if no io since more than 2 min, there is a problem
+                        elif time.time() - stats[file][2] > 120:
+                            print("crawler%s no activity since 30s, killing" % i)
+                            if stats[file][3] < 5:
+                                p.terminate()
+                                stats[i]=stats[i][0:3] + (stats[i][3] + 1, )
+                            else:
+                                os.system("kill -9 %s" % p.pid)
+                    else:
+                        stats[i] = (c[0], c[1], time.time(), 0)
+                except(psutil.NoSuchProcess, psutil.AccessDenied):
+                    try: del stats[i]
+                    except KeyError: pass
+
+                if sum(mem.values()) > config.crawler_max_memory:
+                    raise EnvironmentError("Reach memory limit, exiting")
+                # if a worker died then respan it
+                if not p.is_alive():
+                    jobs[i]=multiprocessing.Process(target=lauch, args=(debug, "crawler%s.id" % i, "W%s:" % i))
+                    jobs[i].start()
+                    try: del stats[i]
+                    except KeyError: pass
+
+            time.sleep(10)
+    except (KeyboardInterrupt, Exception) as e:
+        print("%r" % e)
+        jobs = [j for j in jobs.values() if j.terminate() or j.is_alive()]
+        for i in range(40):
+            jobs = [j for j in jobs if j.is_alive()]
+            if not jobs:
+                break
+        if jobs:
+            for i in range(10):
+                jobs = [j for j in jobs if j.terminate() or j.is_alive()]
+                if not jobs:
+                    break
+
 if __name__ == '__main__':
     debug = 0
-    if sys.argv[1:]:
-        lauch(debug, sys.argv[1])
-    else:
-        lauch(debug)
+    #if sys.argv[1:]:
+    #    lauch(debug, sys.argv[1])
+    #else:
+    #    lauch(debug)
+    worker(debug)
+    #lauch(debug)

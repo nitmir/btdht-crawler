@@ -22,6 +22,7 @@ import scraper
 from btdht import utils
 from replication import Replicator
 
+from crawler import get_id
 hash_to_ignore = set()
 
 def update_hash_to_ignore(db=None):
@@ -75,7 +76,8 @@ def on_torrent_announce(hash, url):
             print("Error on %s: %r" % (hash, e))
     load_url(url, hash)
     
-replicator = Replicator(config.public_ip, 5004, on_torrent_announce=on_torrent_announce)
+replicator = Replicator(config.public_ip, pub_port=config.replication_tcp_port, priv_port=config.replication_udp_port,
+                        dht_port=config.replication_dht_port, on_torrent_announce=on_torrent_announce, dht_id=get_id("feed.id"))
 
 def announce(hash, url=None):
     if not hash in hash_to_ignore:
@@ -462,7 +464,7 @@ def get_torrent_info(db, hash, torrent):
         
     if b'name.utf-8' in torrent[b'info']:
         name = torrent[b'info'][b'name.utf-8'].decode("utf-8", 'ignore')
-    else:
+    elif b'name' in torrent[b'info']:
         try:
             name = torrent[b'info'][b'name'].decode(encoding)
         except UnicodeDecodeError as e:
@@ -472,6 +474,8 @@ def get_torrent_info(db, hash, torrent):
             name = torrent[b'info'][b'name'].decode(encoding, 'ignore')
         except AttributeError:
             name = unicode(torrent[b'info'][b'name'])
+    else:
+        return
     try:
         created = int(torrent.get(b'creation date', int(time.time())))
     except ValueError as e:
@@ -488,6 +492,7 @@ def get_torrent_info(db, hash, torrent):
         files = []
         for i in range(len(torrent[b'info'][b'files'])):
             file = torrent[b'info'][b'files'][i]
+            ppath = b"path"
             if b'path.utf-8' in file:
                 ppath = b'path.utf-8'
                 encoding = 'utf-8'
@@ -499,19 +504,19 @@ def get_torrent_info(db, hash, torrent):
                     raise ValueError("path element sould not be of type %s" % type(p).__name__)
             files.append((os.path.join(*file[ppath]), file))
         files.sort(key=lambda x:x[0])
-        for (_, file) in files:
+        for (path, file) in files:
             if description_size > 40000:
                 description.append("<tr><td>...</td><td></td></tr>\n")
                 break
             try:
-                desc = "<tr><td>%s</td><td>%s</td></tr>\n" % (os.path.join(*file[ppath]).decode(encoding), format_size(file[b'length']))
+                desc = "<tr><td>%s</td><td>%s</td></tr>\n" % (path.decode(encoding), format_size(file[b'length']))
                 description_size+=len(desc)
                 description.append(desc)
             except UnicodeDecodeError:
-                encoding = chardet.detect(os.path.join(*file[ppath]))['encoding']
+                encoding = chardet.detect(path)['encoding']
                 if encoding is None:
                      encoding = "utf-8"
-                desc = "<tr><td>%s</td><td>%s</td></tr>\n" % (os.path.join(*file[ppath]).decode(encoding, 'ignore'), format_size(file[b'length']))
+                desc = "<tr><td>%s</td><td>%s</td></tr>\n" % (path.decode(encoding, 'ignore'), format_size(file[b'length']))
                 description_size+=len(desc)
                 description.append(desc)
         description.append("</table>")
@@ -663,71 +668,66 @@ def loop():
     sql_error = False
     db = MySQLdb.connect(**config.mysql)
     update_hash_to_ignore(db)
-    #init_scrape_table(db)
-    #update_db(db)
     db.commit()
     db.close()
-    ####
-    # notfound = fetch_torrent(db)
-    # feed_torcache(db)
     last_loop = 0
     loop_interval = 300
     replicator.start()
+    replicator.dht.load("feed.dht")
+    print("waiting for replicator")
     while not replicator._ready:
-        print("replicator not ready")
-        time.sleep(10)
+        time.sleep(1)
+        sys.stdout.write(".")
+        sys.stdout.flush()
+    print("OK")
 
-    while True:
-        try:
-            last_loop = time.time()
-            print("\n\n\nNEW LOOP")
-            if not replicator.is_alive():
-                return
-            get_new_torrent()
-            db = MySQLdb.connect(**config.mysql)
-            update_torrent_file(db)
-            notfound = fetch_torrent(db)
-            feed_torcache(db)
-            #hashs=get_hash(db)
-            #print("%d hashs" % len(hashs))
-            #for h in hashs:
-            #    _=get_torrent(db, h)
-            #update_db(db)
-            #feed_torcache(db)
-            scrape(db)
-            db.commit()
-            db.close()
-            widgets = [progressbar.Bar('>'), ' ', progressbar.ETA(), ' ', progressbar.ReverseBar('<')]
-            now = time.time()
-            maxval = int(max(0, loop_interval - (now - last_loop)))
-            if maxval > 0:
-                print("Now spleeping until the next loop")
-                pbar = progressbar.ProgressBar(widgets=widgets, maxval=maxval).start()
-                for i in range(0, maxval):
-                    time.sleep(1)
-                    pbar.update(i+1)
-                pbar.finish()
-            db = MySQLdb.connect(**config.mysql)
-            clean_files(db)
-            compact_torrent(db)
-            if time.time() - last_clean > 60*15:
-                clean(db)
-                last_clean = time.time()
-            db.commit()
-            sql_error = False
-        except socket.timeout:
-            if sql_error:
-                raise
-            time.sleep(10)
-            sql_error = True
-        #except MySQLdb.errors.OperationalError as e:
-        #    if sql_error:
-        #        raise
-        #    time.sleep(10)
-        #    sql_error = True
-        finally:
-            db.close()
-
+    try:
+        while True:
+            try:
+                last_loop = time.time()
+                print("\n\n\nNEW LOOP")
+                if not replicator.is_alive():
+                    return
+                get_new_torrent()
+                db = MySQLdb.connect(**config.mysql)
+                update_torrent_file(db)
+                notfound = fetch_torrent(db)
+                feed_torcache(db)
+                scrape(db)
+                db.commit()
+                db.close()
+                widgets = [progressbar.Bar('>'), ' ', progressbar.ETA(), ' ', progressbar.ReverseBar('<')]
+                now = time.time()
+                maxval = int(max(0, loop_interval - (now - last_loop)))
+                if maxval > 0:
+                    print("Now spleeping until the next loop")
+                    pbar = progressbar.ProgressBar(widgets=widgets, maxval=maxval).start()
+                    for i in range(0, maxval):
+                        time.sleep(1)
+                        pbar.update(i+1)
+                    pbar.finish()
+                db = MySQLdb.connect(**config.mysql)
+                clean_files(db)
+                compact_torrent(db)
+                if time.time() - last_clean > 60*15:
+                    clean(db)
+                    replicator.dht.save("feed.dht")
+                    last_clean = time.time()
+                db.commit()
+                sql_error = False
+            except socket.timeout:
+                if sql_error:
+                    raise
+                time.sleep(10)
+                sql_error = True
+            finally:
+                try:
+                    db.close()
+                except:
+                    pass
+    finally:
+        replicator.dht.save("feed.dht")
+        replicator.stop()
 def upload_to_torcache(db, hash, quiet=False):
     files = {'torrent': open("%s/%s.torrent" % (config.torrents_dir, hash), 'rb')}
     r = requests.post('http://torcache.net/autoupload.php', files=files)
@@ -811,5 +811,8 @@ def join(tl):
     while [t for t in tl if t.isAlive()]:
         time.sleep(0.5)
 if __name__ == '__main__':
-    loop()
+    try:
+        loop()
+    except KeyboardInterrupt:
+        pass
     print("exit")
