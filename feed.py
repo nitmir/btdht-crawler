@@ -673,15 +673,15 @@ def loop():
     last_loop = 0
     loop_interval = 300
     replicator.start()
-    replicator.dht.load("feed.dht")
-    print("waiting for replicator")
-    while not replicator._ready:
-        time.sleep(1)
-        sys.stdout.write(".")
-        sys.stdout.flush()
-    print("OK")
-
     try:
+        replicator.dht.load("feed.dht")
+        print("waiting for replicator")
+        while not replicator._ready:
+            time.sleep(1)
+            sys.stdout.write(".")
+            sys.stdout.flush()
+        print("OK")
+
         while True:
             try:
                 last_loop = time.time()
