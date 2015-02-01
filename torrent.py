@@ -307,7 +307,7 @@ class Client(object):
             else:
                 if msgl < 4:
                     raise ToRead()
-                msg_len = struct.unpack("!i", msg[:4])[0]
+                msg_len = struct.unpack("!I", msg[:4])[0]
                 if msgl < msg_len + 4:
                     raise ToRead()
                 if msg_len > 0:
@@ -364,40 +364,40 @@ class Client(object):
         
 
     def keep_alive(self, s):
-        msg=struct.pack("!i", 0)
+        msg=struct.pack("!I", 0)
         s.send(msg)
 
     def choke(self, s):
-        msg=struct.pack("!ib", 1, 0)
+        msg=struct.pack("!IB", 1, 0)
         s.send(msg)
 
     def unckoke(self, s):
-        msg=struct.pack("!ib", 1, 1)
+        msg=struct.pack("!IB", 1, 1)
         s.send(msg)
 
     def interested(self, s):
         if self._am_interested[s]:
             raise ValueError("already interested")
-        msg=struct.pack("!ib", 1, 2)
+        msg=struct.pack("!IB", 1, 2)
         s.send(msg)
         self._am_interested[s] = True
 
     def notinterested(self, s):
         if not self._am_interested[s]:
             raise ValueError("already not interested")
-        msg=struct.pack("!ib", 1, 3)
+        msg=struct.pack("!IB", 1, 3)
         s.send(msg)
         self._am_interested[s] = False
 
     def have(self, s, piece_index):
-        msg=struct.pack("!ibi", 5, 4, piece_index)
+        msg=struct.pack("!IBI", 5, 4, piece_index)
         s.send(msg)
 
     def extended_handshake(self, s):
         if not self._peer_extended[s]:
             raise ValueError("Peer does not support extension protocol")
         pl = bencode({'m':{'ut_metadata': self._am_metadata}})
-        msg=struct.pack("!ibb", 1 + 1 + len(pl), 20, 0)
+        msg=struct.pack("!IBB", 1 + 1 + len(pl), 20, 0)
         msg+=pl
         s.send(msg)
         
@@ -409,7 +409,7 @@ class Client(object):
             raise ValueError("chocked")
         if piece < self._metadata_pieces_nb[self._socket_hash[s]]:
             pl = bencode({'msg_type': 0, 'piece': piece})
-            msg=struct.pack("!ibb", 1 + 1 + len(pl), 20, self._peer_metadata[s])
+            msg=struct.pack("!IBB", 1 + 1 + len(pl), 20, self._peer_metadata[s])
             msg+=pl
             s.send(msg)
 
@@ -419,7 +419,7 @@ class Client(object):
         if self._am_choking[s]:
             raise ValueError("chocked")
         pl = bencode({'msg_type': 2, 'piece': piece})
-        msg=struct.pack("!ibb", 1 + 1 + len(pl), 20, self._peer_metadata[s])
+        msg=struct.pack("!IBB", 1 + 1 + len(pl), 20, self._peer_metadata[s])
         msg+=pl
         s.send(msg)
 
@@ -430,7 +430,7 @@ class Client(object):
             raise ValueError("chocked")
         pl = bencode({'msg_type': 1, 'piece': piece, 'total_size': len(self._metadata_pieces[self._socket_hash[s]][piece])})
         pl += self._metadata_pieces[self._socket_hash[s]][piece]
-        msg=struct.pack("!ibb", 1 + 1 + len(pl), 20, self._peer_metadata[s])
+        msg=struct.pack("!IBB", 1 + 1 + len(pl), 20, self._peer_metadata[s])
         msg+=pl
         s.send(msg)
 
