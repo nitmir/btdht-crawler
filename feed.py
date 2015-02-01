@@ -30,7 +30,7 @@ def update_hash_to_ignore(db=None):
     if db is None:
         db = MySQLdb.connect(**config.mysql)
     cur = db.cursor()
-    query = "SELECT hash FROM torrents WHERE created_at IS NOT NULL"
+    query = "SELECT UNHEX(hash) FROM torrents WHERE created_at IS NOT NULL"
     cur.execute(query)
     hash_to_ignore = set(r[0] for r in cur)
     cur.close()
@@ -50,7 +50,7 @@ def on_torrent_announce(hash, url):
         print("hash is not hex")
         return
     hash = hash.lower()
-    if hash in hash_to_ignore:
+    if hash.decode("hex") in hash_to_ignore:
         #print("hash already done")
         return
     def load_url(url, hash):
@@ -63,7 +63,7 @@ def on_torrent_announce(hash, url):
                     torrent = gzip.GzipFile(fileobj=bi, mode="rb").read()
                     if torrent:
                         open("%s/%s.torrent" % (config.torrents_new, hash), 'wb+').write(torrent)
-                        hash_to_ignore.add(hash)
+                        hash_to_ignore.add(hash.decode("hex"))
                     else:
                         print("Got empty response from torcache %s" % url)
                 except (gzip.zlib.error, OSError) as e:
@@ -83,7 +83,7 @@ def announce(hash, url=None):
     if not hash in hash_to_ignore:
         if url is None:
             url = "http://torcache.net/torrent/%s.torrent" % hash.upper()
-        hash_to_ignore.add(hash)
+        hash_to_ignore.add(hash.decode("hex"))
         replicator.announce_torrent(hash, url)
 socket.setdefaulttimeout(3)
 
@@ -228,7 +228,7 @@ def get_new_torrent():
         try:
             torrent = utils.bdecode(open(f, 'rb').read())    
             real_hash = hashlib.sha1(utils.bencode(torrent[b'info'])).hexdigest()
-            hash_to_ignore.add(real_hash)
+            hash_to_ignore.add(real_hash.decode("hex"))
             os.rename(f, "%s/%s.torrent" % (config.torrents_dir, real_hash))
         except utils.BcodeError as e:
             pass

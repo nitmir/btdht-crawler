@@ -349,9 +349,9 @@ def worker(debug):
                         if c[0] != stats[i][0] or c[1] != stats[i][1]:
                             stats[i] = (c[0], c[1], time.time(), 0)
                         # if no io since more than 2 min, there is a problem
-                        elif time.time() - stats[file][2] > 120:
+                        elif time.time() - stats[i][2] > 120:
                             print("crawler%s no activity since 30s, killing" % i)
-                            if stats[file][3] < 5:
+                            if stats[i][3] < 5:
                                 p.terminate()
                                 stats[i]=stats[i][0:3] + (stats[i][3] + 1, )
                             else:
@@ -366,13 +366,14 @@ def worker(debug):
                     raise EnvironmentError("Reach memory limit, exiting")
                 # if a worker died then respan it
                 if not p.is_alive():
+                    print("crawler%s died, respawning" % i)
                     jobs[i]=multiprocessing.Process(target=lauch, args=(debug, "crawler%s.id" % i, "W%s:" % i))
                     jobs[i].start()
                     try: del stats[i]
                     except KeyError: pass
 
             time.sleep(10)
-    except (KeyboardInterrupt, Exception) as e:
+    except (KeyboardInterrupt) as e:
         print("%r" % e)
         jobs = [j for j in jobs.values() if j.terminate() or j.is_alive()]
         for i in range(40):
