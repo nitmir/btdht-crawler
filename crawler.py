@@ -17,6 +17,55 @@ import config
 import resource
 import torrent
 
+class HashToIgnore(object):
+    hash_to_ignore = set()
+    hash_not_to_ignore = collections.defaultdict(int)
+    db = None
+
+
+    def __init__(self):
+        self.init_db()
+        self.lock = Lock()
+
+    def init_db(self):
+        try: self.db.close()
+        except: pass
+        self.db = MySQLdb.connect(**config.mysql)
+
+    def add(self, item):
+        self.hash_to_ignore.add(item)
+        try:
+            del self.hash_not_to_ignore[item]
+        except KeyError:
+            pass
+
+    def __contains__(self, item, errno=0):
+        if not item in self.hash_to_ignore:
+            if time.time() - self.hash_not_to_ignore[item] > 300:
+                try:
+                    ret = False
+                    with self.lock:
+                        if self.db.cursor().execute("select (1) from torrents where hash=HEX(%s) AND created_at IS NOT NULL limit 1", (item,)):
+                            ret = True
+                    if ret:
+                        self.hash_to_ignore.add(item)
+                        del self.hash_not_to_ignore[item]
+                        return True
+                    else:
+                        self.hash_not_to_ignore[item] = time.time()
+                        return False
+                except (MySQLdb.Error, ) as e:
+                    if errno > 5:
+                        print("%r" % e)
+                        raise
+                    else:
+                        self.init_db()
+                        return self.__contains__(item, errno=errno+1)
+            else:
+                return False
+        else:
+            return True
+
 class Crawler(DHT):
     def __init__(self, *args, **kwargs):
         super(Crawler, self).__init__(*args, **kwargs)
@@ -35,10 +84,11 @@ class Crawler(DHT):
             try:self.db.close()
             except: pass
 
+
     def start(self):
         # doing some initialisation
         if self.master:
-            self.root.hash_to_ignore = self.get_hash_to_ignore()
+            self.root.hash_to_ignore = HashToIgnore()
             self.root.update_hash = set()
             self.root.update_hash_lock = Lock()
             self.root.bad_info_hash = {}
@@ -142,14 +192,14 @@ class Crawler(DHT):
                     pass
 
             # Actualising hash to ignore
-            self.root.hash_to_ignore = self.get_hash_to_ignore()
+            #self.root.hash_to_ignore = self.get_hash_to_ignore()
 
 
     def on_get_peers_response(self, query, response):
         if response.get("values"):
             info_hash = query.get("info_hash")
             if info_hash:
-                if not info_hash in self.root.good_info_hash and not info_hash in self.root.hash_to_ignore:
+                if not info_hash in self.hash_to_fetch and not info_hash in self.root.hash_to_ignore:
                     self.hash_to_fetch[info_hash]=time.time()
                     #self.root.good_info_hash[info_hash]=time.time()
                     try: del self.root.bad_info_hash[info_hash]
@@ -165,7 +215,7 @@ class Crawler(DHT):
     def on_get_peers_query(self, query):
         info_hash = query.get("info_hash")
         if info_hash:
-            if info_hash in self.root.good_info_hash or info_hash in self.root.hash_to_ignore:
+            if info_hash in self.root.good_info_hash and not info_hash in self.root.hash_to_ignore:
                 self.update_hash(info_hash, get=True)
             elif not info_hash in self.root.bad_info_hash and not info_hash in self.root.good_info_hash and not info_hash in self.root.hash_to_ignore and not info_hash in self.hash_to_fetch:
                 self.determine_info_hash(info_hash)
@@ -173,7 +223,7 @@ class Crawler(DHT):
     def on_announce_peer_query(self, query):
         info_hash = query.get("info_hash")
         if info_hash:
-            if info_hash in self.root.hash_to_ignore:
+            if info_hash not in self.root.hash_to_ignore:
                 self.hash_to_fetch[info_hash]=time.time()
             self.root.good_info_hash[info_hash]=time.time()
             try: del self.root.bad_info_hash[info_hash]
@@ -257,7 +307,7 @@ def get_id(id_file):
             f.write(str(id))
         return id
 
-def lauch(debug, id_file="crawler.id", lprefix=""):
+def lauch(debug, id_file="crawler1.id", lprefix=""):
     global stoped
     print "lauch %s" % id_file
     #resource.setrlimit(resource.RLIMIT_AS, (config.crawler_max_memory, -1)) #limit to one kilobyt
@@ -392,5 +442,7 @@ if __name__ == '__main__':
     #    lauch(debug, sys.argv[1])
     #else:
     #    lauch(debug)
-    worker(debug)
-    #lauch(debug)
+    if config.crawler_worker > 1:
+        worker(debug)
+    else:
+        lauch(debug)
