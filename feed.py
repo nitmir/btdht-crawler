@@ -22,18 +22,8 @@ import scraper
 from btdht import utils
 from replication import Replicator
 
-from crawler import get_id
-hash_to_ignore = set()
-
-def update_hash_to_ignore(db=None):
-    global hash_to_ignore
-    if db is None:
-        db = MySQLdb.connect(**config.mysql)
-    cur = db.cursor()
-    query = "SELECT UNHEX(hash) FROM torrents WHERE created_at IS NOT NULL"
-    cur.execute(query)
-    hash_to_ignore = set(r[0] for r in cur)
-    cur.close()
+from crawler import get_id, HashToIgnore
+hash_to_ignore = HashToIgnore()
 
 def on_torrent_announce(hash, url):
     global hash_to_ignore
@@ -80,7 +70,7 @@ replicator = Replicator(config.public_ip, pub_port=config.replication_tcp_port, 
                         dht_port=config.replication_dht_port, on_torrent_announce=on_torrent_announce, dht_id=get_id("feed.id"))
 
 def announce(hash, url=None):
-    if not hash in hash_to_ignore:
+    if not hash.decode("hex") in hash_to_ignore:
         if url is None:
             url = "http://torcache.net/torrent/%s.torrent" % hash.upper()
         hash_to_ignore.add(hash.decode("hex"))
@@ -320,7 +310,6 @@ def clean(db, hashs=None):
     query = "DELETE FROM torrents WHERE created_at IS NULL AND (dht_last_get < DATE_SUB(NOW(), INTERVAL 1 HOUR) OR dht_last_get IS NULL) AND (dht_last_announce < DATE_SUB(NOW(), INTERVAL 1 HOUR) OR dht_last_announce IS NULL)"
     cur.execute(query)
     db.commit()
-    update_hash_to_ignore(db)
 
 def is_torcache(hash):
     resp = requests.head("http://torcache.net/torrent/%s.torrent" % hash.upper())
@@ -667,7 +656,6 @@ def loop():
     last_clean = time.time()
     sql_error = False
     db = MySQLdb.connect(**config.mysql)
-    update_hash_to_ignore(db)
     db.commit()
     db.close()
     last_loop = 0
