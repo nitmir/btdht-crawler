@@ -193,6 +193,7 @@ class Crawler(DHT):
 
             # Actualising hash to ignore
             #self.root.hash_to_ignore = self.get_hash_to_ignore()
+            self.save()
 
 
     def on_get_peers_response(self, query, response):
