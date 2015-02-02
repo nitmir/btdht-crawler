@@ -31,6 +31,9 @@ class HashToIgnore(object):
         try: self.db.close()
         except: pass
         self.db = MySQLdb.connect(**config.mysql)
+        # SELECT statements are performed in a nonlocking fashion
+        self.db.cursor().execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
+        
 
     def add(self, item):
         self.hash_to_ignore.add(item)
