@@ -70,7 +70,7 @@ def on_torrent_announce(hash, url):
                     print("%r" % e)
             else:
                 print("Got empty response from torcache %s" % url)
-        except (urllib2.HTTPError, socket.error):
+        except (urllib2.HTTPError, socket.error, urllib2.URLError):
             pass
         except (EOFError,) as e:
             print("Error on %s: %r" % (hash, e))
@@ -726,6 +726,7 @@ def loop():
                 except:
                     pass
     finally:
+        print("exiting")
         replicator.dht.save("feed.dht")
         replicator.stop()
 def upload_to_torcache(db, hash, quiet=False):
