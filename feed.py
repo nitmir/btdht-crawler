@@ -70,11 +70,10 @@ replicator = Replicator(config.public_ip, pub_port=config.replication_tcp_port, 
                         dht_port=config.replication_dht_port, on_torrent_announce=on_torrent_announce, dht_id=get_id("feed.id"))
 
 def announce(hash, url=None):
-    if not hash.decode("hex") in hash_to_ignore:
-        if url is None:
-            url = "http://torcache.net/torrent/%s.torrent" % hash.upper()
-        hash_to_ignore.add(hash.decode("hex"))
-        replicator.announce_torrent(hash, url)
+    if url is None:
+        url = "http://torcache.net/torrent/%s.torrent" % hash.upper()
+    hash_to_ignore.add(hash.decode("hex"))
+    replicator.announce_torrent(hash, url)
 socket.setdefaulttimeout(3)
 
 def widget(what=""):

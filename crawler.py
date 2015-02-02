@@ -49,7 +49,10 @@ class HashToIgnore(object):
                             ret = True
                     if ret:
                         self.hash_to_ignore.add(item)
-                        del self.hash_not_to_ignore[item]
+                        try:
+                            del self.hash_not_to_ignore[item]
+                        except KeyError:
+                            pass
                         return True
                     else:
                         self.hash_not_to_ignore[item] = time.time()
