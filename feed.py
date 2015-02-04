@@ -97,7 +97,7 @@ def scrape(db=None):
     if config.scrape_interval <= 0:
         return
     cur = db.cursor()
-    query = "SELECT COUNT(id) FROM torrents WHERE created_at IS NOT NULL AND (scrape_date IS NULL OR scrape_date <= DATE_SUB(NOW(), INTERVAL %d MINUTE)) ORDER BY scrape_date ASC" % config.scrape_interval
+    query = "SELECT COUNT(id) FROM torrents WHERE created_at IS NOT NULL AND (scrape_date IS NULL OR scrape_date <= DATE_SUB(NOW(), INTERVAL %d MINUTE))" % config.scrape_interval
     cur.execute(query)
     ret = [r[0] for r in cur]
     count=ret[0]
@@ -109,7 +109,7 @@ def scrape(db=None):
 
     if count <= 0:
         return
-    query = "SELECT hash FROM torrents WHERE created_at IS NOT NULL AND (scrape_date IS NULL OR scrape_date <= DATE_SUB(NOW(), INTERVAL %d MINUTE)) ORDER BY scrape_date ASC" % config.scrape_interval
+    query = "SELECT hash FROM torrents WHERE created_at IS NOT NULL AND (scrape_date IS NULL OR scrape_date <= DATE_SUB(NOW(), INTERVAL %d MINUTE))" % config.scrape_interval
     db2 = MySQLdb.connect(**config.mysql)
     cur2 = db2.cursor()
     cur2.execute(query)
@@ -490,7 +490,8 @@ def get_torrent_info(db, hash, torrent):
                     file[ppath][j] = str(p).encode()
                 elif not isinstance(p, bytes):
                     raise ValueError("path element sould not be of type %s" % type(p).__name__)
-            files.append((os.path.join(*file[ppath]), file))
+            if file[ppath]:
+                files.append((os.path.join(*file[ppath]), file))
         files.sort(key=lambda x:x[0])
         for (path, file) in files:
             if description_size > 40000:

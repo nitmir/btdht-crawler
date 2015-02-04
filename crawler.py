@@ -9,6 +9,7 @@ import struct
 import MySQLdb
 import collections
 import multiprocessing
+import threading
 from threading import Thread, Lock
 from btdht import DHT, ID, RoutingTable
 from btdht.utils import enumerate_ids
@@ -20,12 +21,24 @@ import torrent
 class HashToIgnore(object):
     hash_to_ignore = set()
     hash_not_to_ignore = collections.defaultdict(int)
-    db = None
+    _db = collections.defaultdict(lambda:MySQLdb.connect(**config.mysql))
 
+    # One db connection by thread
+    @property
+    def db(self):
+        return self._db[threading.current_thread()]
 
-    def __init__(self):
-        self.init_db()
-        self.lock = Lock()
+    @db.setter
+    def db(self, value):
+        self._db[threading.current_thread()] = value
+
+    @db.deleter
+    def db(self):
+        try: self._db[threading.current_thread()].close()
+        except: pass
+        try: del self._db[threading.current_thread()]
+        except KeyError: pass
+
 
     def init_db(self):
         try: self.db.close()
@@ -44,13 +57,9 @@ class HashToIgnore(object):
 
     def __contains__(self, item, errno=0):
         if not item in self.hash_to_ignore:
-            if time.time() - self.hash_not_to_ignore[item] > 300:
+            if time.time() - self.hash_not_to_ignore[item] > 600:
                 try:
-                    ret = False
-                    with self.lock:
-                        if self.db.cursor().execute("select (1) from torrents where hash=HEX(%s) AND created_at IS NOT NULL limit 1", (item,)):
-                            ret = True
-                    if ret:
+                    if self.db.cursor().execute("select (1) from torrents where hash=HEX(%s) AND created_at IS NOT NULL limit 1", (item,)):
                         self.hash_to_ignore.add(item)
                         try:
                             del self.hash_not_to_ignore[item]
@@ -60,7 +69,7 @@ class HashToIgnore(object):
                     else:
                         self.hash_not_to_ignore[item] = time.time()
                         return False
-                except (MySQLdb.Error, ) as e:
+                except (MySQLdb.Error,) as e:
                     if errno > 5:
                         print("%r" % e)
                         raise

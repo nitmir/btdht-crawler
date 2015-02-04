@@ -149,6 +149,18 @@ class Client(object):
         rem(self._hash_socket, hash)
         rem(self._metadata_size_qorum, hash)
 
+    @staticmethod
+    def _create_connection(addr):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(0.5)
+        l_onoff = 1
+        l_linger = 0
+        # This will cause TCP to abort the connection when it is closed, flush the data and send a RST
+        # instead of going to the state TIME_WAIT
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack('ii', l_onoff, l_linger))
+        s.connect(addr)
+        return s
+
     def add(self, ip, port, hash):
         if hash in self.meta_data:
             return True
@@ -156,7 +168,7 @@ class Client(object):
             return None
         if not (ip, port, hash) in self._peers_socket:
             try:
-                s = socket.create_connection((ip, port), timeout=0.5)
+                s = self._create_connection((ip, port))
             except (socket.timeout, socket.error, ValueError, BcodeError):
                 return False
 
