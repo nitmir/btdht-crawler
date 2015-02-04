@@ -1,7 +1,8 @@
+[submodule "datrie"]
+	path = datrie
+	url = https://github.com/kmike/datrie
+	branch = master
 [submodule "python-btdht"]
 	path = python-btdht
 	url = https://github.com/nitmir/btdht
 	branch = master
-[submodule "datrie"]
-	path = datrie
-	url = https://github.com/kmike/datrie
