@@ -98,6 +98,8 @@ def scrape(db=None):
         return
     cur = db.cursor()
     query = "SELECT COUNT(id) FROM torrents WHERE created_at IS NOT NULL AND (scrape_date IS NULL OR scrape_date <= DATE_SUB(NOW(), INTERVAL %d MINUTE))" % config.scrape_interval
+    if config.scape_limit > 0:
+        query += " LIMIT %d" % config.scape_limit
     cur.execute(query)
     ret = [r[0] for r in cur]
     count=ret[0]
@@ -110,6 +112,8 @@ def scrape(db=None):
     if count <= 0:
         return
     query = "SELECT hash FROM torrents WHERE created_at IS NOT NULL AND (scrape_date IS NULL OR scrape_date <= DATE_SUB(NOW(), INTERVAL %d MINUTE))" % config.scrape_interval
+    if config.scape_limit > 0:
+        query += " LIMIT %d" % config.scape_limit
     db2 = MySQLdb.connect(**config.mysql)
     cur2 = db2.cursor()
     cur2.execute(query)

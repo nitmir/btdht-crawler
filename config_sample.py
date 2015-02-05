@@ -52,3 +52,10 @@ replication_dht_port = 5005
 
 # Scrape intervale
 scrape_interval = 60 # in minute, set 0 to disable scraping
+
+# Max number of torrent to scrape by pass
+# set a number high enough to be able de scrape every torrents in a
+# scrape_interval. a pass take 5min so scrape_interval should be
+# something like num_torrents / (scrape_interval / 5)
+# Set to None to scrape all torrents that need to be scraped
+scape_limit = 250000 # set to None to disable
