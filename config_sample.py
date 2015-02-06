@@ -4,7 +4,8 @@ mysql = {
   "user": "piratebay",
   "passwd": "PASSWORD",
   "db":"piratebay",
-  "host":"localhost"
+  "host":"localhost",
+  "charset":'utf8',
 }
 
 # crawler base port. port will be choosen (deterministically)
