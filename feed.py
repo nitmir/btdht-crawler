@@ -643,7 +643,7 @@ def compact_torrent(db=None):
         #print("  %s entrée trouvé" % len(hashs))
         c=i
         for hash, torcache in db_hashs.items():
-            if torcache == 1:
+            if config.compact_archived_torrents and torcache == 1:
                 torrent = get_torrent(db, hash, base_path=config.torrents_done)
                 torrent[b'info'][b'pieces'] = b''
                 with open("%s%s.torrent" % (archive_path, hash), 'wb+') as f:

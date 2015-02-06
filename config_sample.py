@@ -35,6 +35,14 @@ torrents_done = "torrents_done/"
 # where to archive torrent. The script will create
 # one subdirectory by day in this directory
 torrents_archive = "torrents_archives/"
+
+# If the torrent has successfully been uploaded to torcache
+# the liste of pieces will be removed in the torrent file
+# before archiving. It allow to keep all the interesting
+# metadata of the .torrent (name, list of file) but drastically
+# reduce its size. The file will be unusable in a torrent client
+compact_archived_torrents = True
+
 # which dir to watch for new torrent
 # this is here you can had custom torrent by hand
 # juste by coping them in that ddirectory

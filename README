@@ -1,8 +1,0 @@
-dependancies :
-  * python-progressbar
-  * python-zmq
-  * python-mysqldb
-  * python-chardet
-  * python-psutil
-  * python-datrie (linked as submodule)
-  * python-btdht (linked as submodule)
