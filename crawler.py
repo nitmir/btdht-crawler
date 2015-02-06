@@ -439,7 +439,7 @@ def worker(debug):
                     except KeyError: pass
 
             time.sleep(10)
-    except (KeyboardInterrupt) as e:
+    except (KeyboardInterrupt, EnvironmentError) as e:
         print("%r" % e)
         jobs = [j for j in jobs.values() if j.terminate() or j.is_alive()]
         for i in range(40):

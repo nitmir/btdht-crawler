@@ -102,7 +102,10 @@ def scrape(db=None):
         query += " LIMIT %d" % config.scape_limit
     cur.execute(query)
     ret = [r[0] for r in cur]
-    count=ret[0]
+    if config.scape_limit > 0:
+        count=min(ret[0], config.scape_limit)
+    else:
+        count=ret[0]
     #hashs = [r[0] for r in cur]
     #count=len(hashs)
     qhashs = queue.Queue()
@@ -113,7 +116,7 @@ def scrape(db=None):
         return
     query = "SELECT hash FROM torrents WHERE created_at IS NOT NULL AND (scrape_date IS NULL OR scrape_date <= DATE_SUB(NOW(), INTERVAL %d MINUTE))" % config.scrape_interval
     if config.scape_limit > 0:
-        query += " LIMIT %d" % config.scape_limit
+        query += " ORDER BY scrape_date ASC LIMIT %d" % config.scape_limit
     db2 = MySQLdb.connect(**config.mysql)
     cur2 = db2.cursor()
     cur2.execute(query)
@@ -544,8 +547,7 @@ def update_db_torrent(db, cur, hash, torrent, id=None, torcache=None, quiet=Fals
             if not quiet:
                 print("\r  done %s" % name)
             return True
-        #except (KeyError, UnicodeDecodeError, LookupError, ValueError) as e:
-        except (KeyError, LookupError) as e:
+        except (KeyError, UnicodeDecodeError, LookupError, ValueError, TypeError) as e:
             print("\r: %r" % e)
             failed.add(hash)
             return False
