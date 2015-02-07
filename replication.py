@@ -255,7 +255,7 @@ class Replicator(object):
     def send_swarm(self, ip, port):
         context = zmq.Context()
         sock = context.socket(zmq.REQ)
-        sock.setsockopt(zmq.LINGER, 100)
+        sock.setsockopt(zmq.LINGER, 1000)
         sock.RCVTIMEO = 1000
         sock.SNDTIMEO = 1000
         sock.connect("tcp://%s:%s" % (ip, port))
