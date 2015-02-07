@@ -12,6 +12,7 @@ from the torrents currently downloaded within the dht.
   * python-mysqldb
   * python-chardet
   * python-psutil
+  * python-netaddr
   * btdht (linked as submodule)
   * cython (for btdht)
   * datrie (for btdht, linked as submodule)

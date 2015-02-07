@@ -4,6 +4,7 @@ import os
 import sys
 import zmq
 import time
+import netaddr
 import struct
 import random
 import json
@@ -18,9 +19,17 @@ def test_port(i):
     if not i>0 and i<65536:
         raise ValueError("port %s not valid" % i)
 
-#def random(size):
-#    with open("/dev/urandom") as f:
-#        return f.read(size)
+non_routable_networks = [netaddr.IPNetwork(n) for n in [ '10.0.0.0/8', '172.16.0.0/12','198.18.0.0/15',
+        '169.254.0.0/16', '192.168.0.0/16', '224.0.0.0/4', '100.64.0.0/10',
+        '0.0.0.0/8','127.0.0.0/8','192.0.2.0/24','198.51.100.0/24','203.0.113.0/24',
+        '192.0.0.0/29', '240.0.0.0/4', '255.255.255.255/32',
+        ]]
+
+def is_routable(ip):
+    for net in non_routable_networks:
+        if ip in net:
+            return False
+    return True
 
 class Replicator(object):
 
@@ -203,7 +212,7 @@ class Replicator(object):
             self.sub_sock.connect("tcp://%s:%s" % (ip, pub_port))
 
     def add_publisher(self, ip, pub_port, priv_port):
-        if not (ip, pub_port, priv_port) in self.publisher:
+        if not (ip, pub_port, priv_port) in self.publisher and is_routable(ip):
             if self.debug:
                 print((ip, pub_port, priv_port))
             addr = "tcp://%s:%s" % (ip, pub_port)
@@ -290,6 +299,9 @@ class Replicator(object):
                     i+=1
                 context = zmq.Context()
                 sock = context.socket(zmq.REP)
+                sock.setsockopt(zmq.LINGER, 1000)
+                sock.RCVTIMEO = 1000
+                sock.SNDTIMEO = 1000
                 sock.bind("tcp://*:%s" % zport)
                 break
             except zmq.ZMQError as e:
@@ -343,26 +355,27 @@ class Replicator(object):
             (sockets,_,_) = select.select([self.sock], [], [], 1)
             if sockets:
                 data, addr = self.sock.recvfrom(4048)
-                try:
-                    if data[0] == "b":
-                        _, port_bootstrap, port_pub = struct.unpack("!1sHH", data)
-                        if self.debug:
-                            print("b: %s,%s" % (port_bootstrap, port_pub))
-                        test_port(port_bootstrap)
-                        test_port(port_pub)
-                        self.sock.sendto(struct.pack("!1sH", "d", self.pub_port), addr)
-                        self.add_publisher(addr[0], port_pub, addr[1])
-                        if self.debug:
-                            print("Send swarm to %s:%s" % (addr[0], port_bootstrap))
-                        self.send_swarm(addr[0], port_bootstrap)
-                    elif data[0] == "d":
-                        _, port_pub = struct.unpack("!1sH", data)
-                        if self.debug:
-                            print("d: %s" % port_pub)
-                        test_port(port_pub)
-                        self.add_publisher(addr[0], port_pub, addr[1])
-                except (ValueError, struct.error) as e:
-                    print("%r: %r" % (e, data))
+                if is_routable(addr[0]):
+                    try:
+                        if data[0] == "b":
+                            _, port_bootstrap, port_pub = struct.unpack("!1sHH", data)
+                            if self.debug:
+                                print("b: %s,%s" % (port_bootstrap, port_pub))
+                            test_port(port_bootstrap)
+                            test_port(port_pub)
+                            self.sock.sendto(struct.pack("!1sH", "d", self.pub_port), addr)
+                            self.add_publisher(addr[0], port_pub, addr[1])
+                            if self.debug:
+                                print("Send swarm to %s:%s" % (addr[0], port_bootstrap))
+                            self.send_swarm(addr[0], port_bootstrap)
+                        elif data[0] == "d":
+                            _, port_pub = struct.unpack("!1sH", data)
+                            if self.debug:
+                                print("d: %s" % port_pub)
+                            test_port(port_pub)
+                            self.add_publisher(addr[0], port_pub, addr[1])
+                    except (ValueError, struct.error) as e:
+                        print("%r: %r" % (e, data))
 
     def announce_torrent(self, hash, url):
         """Announce the torrent of hash hash available a url to the swarm"""
