@@ -73,3 +73,7 @@ scrape_interval = 60 # in minute, set 0 to disable scraping
 # something like num_torrents / (scrape_interval / 5)
 # Set to None to scrape all torrents that need to be scraped
 scape_limit = 250000 # set to None to disable
+
+# if True generate a description from the torrent files list
+# if False, set it to NULL
+generate_description = True

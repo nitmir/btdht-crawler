@@ -516,6 +516,8 @@ def update_db_torrent(db, cur, hash, torrent, id=None, torcache=None, quiet=Fals
             if not infos:
                 return
             (name, created, files_nb, size, description) = infos
+            if not config.generate_description:
+                description = None
             if torcache is not None:
                 cur.execute("UPDATE torrents SET name=%s, description=%s, size=%s, files_count=%s, created_at=%s, visible_status=0, torcache=%s WHERE hash=%s", (name, description, size, files_nb, time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(created)), torcache, hash))
             else:
