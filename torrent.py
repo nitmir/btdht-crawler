@@ -19,6 +19,8 @@ class ToRead(Exception):
     pass
 
 class Client(object):
+    """A torrent client retrieving metadata files"""
+
     _am_choking = {} # socket -> bool
     _am_interested = {} # socket -> bool
     _peer_choking = {} # socket -> bool
@@ -362,18 +364,7 @@ class Client(object):
         reserved_bits[5]= chr(ord(reserved_bits[5]) | ord('\x10'))
         reserved_bits="".join(reserved_bits)
         msg="%sBitTorrent protocol%s%s%s" % (chr(19), reserved_bits, self._socket_hash[s], self.id)
-        #print "%r" % msg
         s.send(msg)
-        #pstrlen = ord(self.recv_fixlen(s, 1))
-        #pstr = self.recv_fixlen(s, pstrlen)
-        #reserved = self.recv_fixlen(s, 8)
-        #self._peer_extended[s] = (ord(reserved[5]) & 16) == 16
-        #info_hash = self.recv_fixlen(s, 20)
-        #peer_id = self.recv_fixlen(s, 20)
-        #print "pstr:%s" % pstr
-        #print "reserver:{0:064b}".format(int(reserved.encode("hex"), 16))
-        #print "info_hash:%r" % info_hash
-        
 
     def keep_alive(self, s):
         msg=struct.pack("!I", 0)
