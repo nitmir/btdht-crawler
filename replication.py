@@ -255,6 +255,9 @@ class Replicator(object):
     def send_swarm(self, ip, port):
         context = zmq.Context()
         sock = context.socket(zmq.REQ)
+        sock.setsockopt(zmq.LINGER, 100)
+        sock.RCVTIMEO = 1000
+        sock.SNDTIMEO = 1000
         sock.connect("tcp://%s:%s" % (ip, port))
         sock.send(json.dumps({"q":"swarm_list", "swarm":self.publisher.keys()}), zmq.NOBLOCK)
         #return sock.recv() == "ok"
