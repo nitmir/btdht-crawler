@@ -8,7 +8,7 @@ mysql = {
   "charset":'utf8',
 }
 
-# crawler base port. port will be choosen (deterministically)
+# crawler udp base port. port will be choosen (deterministically)
 # between crawler_base_port and crawler_base_port + 255
 # if you lauch multiple worker it may happen that the first
 # byte of the id are equals beetween 2 worken
@@ -57,7 +57,12 @@ public_ip = "1.2.3.4"
 # the other with is torcache link
 replication_udp_port = 5004
 replication_tcp_port = 5004
+# udp port
 replication_dht_port = 5005
+# please put here at least two tcp ports
+# leave empty to choose randomly avaible port on
+# the system
+bootstrap_port = []
 
 # Scrape intervale
 scrape_interval = 60 # in minute, set 0 to disable scraping

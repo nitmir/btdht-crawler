@@ -26,7 +26,7 @@ class Replicator(object):
 
     rep_id = '\xe6\xdf\x8e\xcc\x0cc}{\x8b\x02(m\t\xe4\xbc\xb8\nD4\xb5'
 
-    def __init__(self, public_ip, pub_port, priv_port=None, dht_port=None, bootstrap_port=None, on_torrent_announce=None, debug=False, dht_id=None):
+    def __init__(self, public_ip, pub_port, priv_port=None, dht_port=None, bootstrap_port=[], on_torrent_announce=None, debug=False, dht_id=None):
         """
          * `public_ip` mst be your ip address as it is seen on the global internet (no local non routable ip here)
          * `pub_port` is a tcp port on wich you will receive message from the swarm
@@ -280,29 +280,36 @@ class Replicator(object):
         return False
 
     def bootstrap_client(self, ip, port):
+        i=0
         while True:
             try:
-                if self.bootstrap_port is None:
+                if not self.bootstrap_port:
                     zport = random.randint(10000,60000)
                 else:
-                    zport = self.bootstrap_port
+                    zport = self.bootstrap_port[i%len(self.bootstrap_port)]
+                    i+=1
                 context = zmq.Context()
                 sock = context.socket(zmq.REP)
                 sock.bind("tcp://*:%s" % zport)
                 break
             except zmq.ZMQError as e:
                 print("%r" % e)
-        poller = zmq.Poller()
-        poller.register(sock, zmq.POLLIN)
-        while True:
-            try:
-                self.sock.sendto(struct.pack("!1sHH", "b", zport, self.pub_port), (ip, port))
-                break
-            except socket.error as e:
-                print("%r" % e)
-                if e.errno not in [11, 1]: # 11: Resource temporarily unavailable
-                    return
+                time.sleep(0.1)
+                try:sock.unbind("tcp://*:%s" % zport)
+                except zmq.ZMQError:pass
+                try:sock.close()
+                except zmq.ZMQError:pass
         try:
+            poller = zmq.Poller()
+            poller.register(sock, zmq.POLLIN)
+            while True:
+                try:
+                    self.sock.sendto(struct.pack("!1sHH", "b", zport, self.pub_port), (ip, port))
+                    break
+                except socket.error as e:
+                    print("%r" % e)
+                    if e.errno not in [11, 1]: # 11: Resource temporarily unavailable
+                        return
             sockets = dict(poller.poll(5000))
             if sockets and sockets[sock] == zmq.POLLIN:
                 data = json.loads(sock.recv(zmq.NOBLOCK))
@@ -320,6 +327,11 @@ class Replicator(object):
         except ValueError as e:
             sock.send(str(e), zmq.NOBLOCK)
             print("%r" % e)
+        finally:
+            try:sock.unbind("tcp://*:%s" % zport)
+            except zmq.ZMQError:pass
+            try:sock.close()
+            except zmq.ZMQError:pass
         return False
 
 

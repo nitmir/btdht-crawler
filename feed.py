@@ -66,7 +66,8 @@ def on_torrent_announce(hash, url):
     load_url(url, hash)
     
 replicator = Replicator(config.public_ip, pub_port=config.replication_tcp_port, priv_port=config.replication_udp_port,
-                        dht_port=config.replication_dht_port, on_torrent_announce=on_torrent_announce, dht_id=get_id("feed.id"))
+                        dht_port=config.replication_dht_port, on_torrent_announce=on_torrent_announce, dht_id=get_id("feed.id"),
+                        bootstrap_port=config.bootstrap_port)
 
 def announce(hash, url=None):
     if url is None:

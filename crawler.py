@@ -409,8 +409,8 @@ def worker(debug):
                 # watch if the process has done some io
                 try:
                     pp = psutil.Process(p.pid)
-                    mem[i] = pp.memory_info().rss
-                    c = pp.io_counters()
+                    mem[i] = pp.get_memory_info().rss
+                    c = pp.get_io_counters()
                     if i in stats:
                         if c[0] != stats[i][0] or c[1] != stats[i][1]:
                             stats[i] = (c[0], c[1], time.time(), 0)
