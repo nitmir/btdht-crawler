@@ -26,6 +26,7 @@ non_routable_networks = [netaddr.IPNetwork(n) for n in [ '10.0.0.0/8', '172.16.0
         ]]
 
 def is_routable(ip):
+    ip = netaddr.IPAddress(ip)
     for net in non_routable_networks:
         if ip in net:
             return False
