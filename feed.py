@@ -15,6 +15,8 @@ import time
 import chardet
 import socket
 import progressbar
+import threading
+import collections
 from threading import Thread
 import Queue as queue
 
@@ -124,22 +126,27 @@ def scrape(db=None):
     for r in cur2:
         l.append(r[0])
         i+=1
-        if i >= 74:
+        if i >= 50:
             qhashs.put(l)
             l = []
             i=0
     qhashs.put(l)
 
     pbar = progressbar.ProgressBar(widgets=widget("torrents scraped"), maxval=count).start()    
-    def scrape_thread(cur2, pbar, count, qhashs, nth, total, ip="open.demonii.com"):
+    def scrape_thread(cur2, pbar, count, qhashs, nth, total, ips=["open.demonii.com"]):
         db = MySQLdb.connect(**config.mysql)
         cur = db.cursor()
         last_commit = time.time()
         errno=0
+        nip = len(ips)
+        banip=collections.defaultdict(int)
+        i = nth
         try:
             l = qhashs.get(timeout=0)
             while True:
                 try:
+                    ip = ips[i%len(ips)]
+                    i+=1
                     for hash, info in scraper.scrape("udp://%s:1337/announce" % ip, l).items():
                         cur.execute("UPDATE torrents SET scrape_date=NOW(), seeders=%s, leechers=%s, downloads_count=%s WHERE hash=%s", (info['seeds'], info['peers'], info['complete'], hash))
                     if time.time() - last_commit > 30:
@@ -150,12 +157,23 @@ def scrape(db=None):
                     errno=0
                 except (socket.timeout, socket.gaierror, socket.error):
                     db.commit()
+                    banip[ip]+=1
+                    if banip[ip]>3:
+                        try:ips.remove(ip)
+                        except ValueError:
+                            pass
+                    if not ips:
+                        raise ValueError("all ips failed")
                     time.sleep(0.1 * errno + 0.1)
                     errno+=1
-                    if errno > 10:
+                    if errno > nip*3:
                         raise
-        except queue.Empty:
+        except (queue.Empty, ZeroDivisionError):
             pass
+        except (socket.timeout, socket.gaierror, socket.error):
+            qhashs.put(l)
+        except (ValueError, RuntimeError) as e:
+            print e
         finally:
             db.commit()
             cur.close()
@@ -167,7 +185,7 @@ def scrape(db=None):
         ip = [ s[4][0] for s in socket.getaddrinfo("open.demonii.com", 0, socket.AF_INET, socket.SOCK_DGRAM)]
         mod = len(ip)
         for i in range(0, total):
-            t = Thread(target=scrape_thread, args=(cur2, pbar, count, qhashs, i,total, ip[i % mod]))
+            t = Thread(target=scrape_thread, args=(cur2, pbar, count, qhashs, i,total, ip))
             t.daemon = True
             t.setName("scrape-%02d" % i)
             t.start()
