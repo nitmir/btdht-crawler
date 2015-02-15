@@ -208,7 +208,7 @@ class Crawler(DHT):
 
             # Actualising hash to ignore
             #self.root.hash_to_ignore = self.get_hash_to_ignore()
-            self.save()
+            self.save(max_node=4000)
 
 
     def on_get_peers_response(self, query, response):
@@ -323,9 +323,9 @@ def get_id(id_file):
             f.write(str(id))
         return id
 
-def lauch(debug, id_file="crawler1.id", lprefix=""):
+def lauch(debug, id_file="crawler1.id", lprefix="", worker_alive=None):
     global stoped
-    print "lauch %s" % id_file
+    print "%slauch %s" % (lprefix, id_file)
     #resource.setrlimit(resource.RLIMIT_AS, (config.crawler_max_memory, -1)) #limit to one kilobyt
     resource.setrlimit(resource.RLIMIT_NOFILE, (4096, 4096))
     id_base = get_id(id_file)
@@ -361,7 +361,9 @@ def lauch(debug, id_file="crawler1.id", lprefix=""):
                 raise Exception("Stoped")
             liv.start()
             time.sleep(1.4142135623730951 * 0.3)
-        dht_base.load()
+        print "%sloading routing table" % lprefix
+        dht_base.load(max_node=4000)
+        print "%srouting table loaded" % lprefix
         while True:
             for liv in liveness:
                 if stoped:
@@ -372,11 +374,13 @@ def lauch(debug, id_file="crawler1.id", lprefix=""):
                     raise Exception("Stoped")
                     print("thread stoped, restarting")
                     liv.start()
+            if worker_alive is not None and (time.time() - worker_alive.value) > 15:
+                raise Exception("Manager worker exited")
             time.sleep(10)
     except (KeyboardInterrupt, Exception) as e:
         print("%r" % e)
         stop(liveness)
-        dht_base.save()
+        dht_base.save(max_node=4000)
         print("exit")
 
 def stop(liveness):
@@ -398,12 +402,15 @@ def stop(liveness):
 def worker(debug):
     jobs = {}
     try:
+        worker_alive = multiprocessing.Value('i', int(time.time()))
         for i in range(1, config.crawler_worker + 1):
-            jobs[i]=multiprocessing.Process(target=lauch, args=(debug, "crawler%s.id" % i, "W%s:" % i))
+            jobs[i]=multiprocessing.Process(target=lauch, args=(debug, "crawler%s.id" % i, "W%s:" % i, worker_alive))
+            jobs[i].daemon = True
             jobs[i].start()
         stats={}
         mem={}
         while True:
+            worker_alive.value = int(time.time())
             for i, p in jobs.items():
 
                 # watch if the process has done some io
