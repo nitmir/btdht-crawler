@@ -773,8 +773,10 @@ def feed_torcache(db, hashs=None):
             db.close()
 
     cur.close()
+    stdout = sys.stdout
     try:
         threads = []
+        sys.stdout = ThreadWriter(stdout)
         for i in range(0, 20):
             t = Thread(target=upload, args=(hashsq, counter))
             t.setName("upload-%02d" % i)
@@ -783,6 +785,7 @@ def feed_torcache(db, hashs=None):
             threads.append(t)
         join(threads)
     finally:
+        sys.stdout = stdout
         pbar.finish()
     print("%s uploaded, %s already upped, %s failed" % (counter[0], counter[2], counter[1]))
 
@@ -790,6 +793,18 @@ def feed_torcache(db, hashs=None):
 def join(tl):
     while [t for t in tl if t.isAlive()]:
         time.sleep(0.5)
+
+class ThreadWriter(object):
+    def __init__(self, stdout):
+        self.stdout = stdout
+
+    def write(self, value):
+        if threading.current_thread().name == 'MainThread':
+            self.stdout.write(value)
+
+
+
+
 if __name__ == '__main__':
     try:
         loop()
