@@ -7,6 +7,7 @@ It runs multiple instance of the dht concurrently to be able to feed a database
 from the torrents currently downloaded within the dht.
 
 ## dependancies
+  * python 2.7
   * python-progressbar
   * python-zmq
   * python-mysqldb
