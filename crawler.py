@@ -59,7 +59,7 @@ class HashToIgnore(object):
         if not item in self.hash_to_ignore:
             if time.time() - self.hash_not_to_ignore[item] > 600:
                 try:
-                    if self.db.cursor().execute("select (1) from torrents where hash=HEX(%s) AND created_at IS NOT NULL limit 1", (item,)):
+                    if self.db.cursor().execute("select (1) from torrents where hash=%s AND created_at IS NOT NULL limit 1", (item.encode("hex"),)):
                         self.hash_to_ignore.add(item)
                         try:
                             del self.hash_not_to_ignore[item]
@@ -269,7 +269,7 @@ class Crawler(DHT):
         
 
     def update_hash(self, info_hash, get, errornb=0):
-        if info_hash in self.root.hash_to_ignore:
+        if info_hash is not None and info_hash in self.root.hash_to_ignore:
             return
         with self.root.update_hash_lock:
             # Try update a hash at most once every 5 minutes
@@ -280,15 +280,15 @@ class Crawler(DHT):
                 hashs_get = [h for h,g in self.root.update_hash if g]
                 hashs_announce = [h for h,g in self.root.update_hash if not g]
                 self.root.update_hash = set()
-        query_get = "INSERT INTO torrents (hash, visible_status, dht_last_get) VALUES %s ON DUPLICATE KEY UPDATE dht_last_get=NOW();" % ", ".join("(LOWER(HEX(%s)),2,NOW())" for h in hashs_get)
-        query_announce = "INSERT INTO torrents (hash, visible_status, dht_last_announce) VALUES %s ON DUPLICATE KEY UPDATE dht_last_announce=NOW();" % ", ".join("(LOWER(HEX(%s)),2,NOW())" for h in hashs_announce)
+        query_get = "INSERT INTO torrents (hash, visible_status, dht_last_get) VALUES %s ON DUPLICATE KEY UPDATE dht_last_get=NOW();" % ", ".join("(LOWER(%s),2,NOW())" for h in hashs_get if h)
+        query_announce = "INSERT INTO torrents (hash, visible_status, dht_last_announce) VALUES %s ON DUPLICATE KEY UPDATE dht_last_announce=NOW();" % ", ".join("(LOWER(%s),2,NOW())" for h in hashs_announce if h)
         db = MySQLdb.connect(**config.mysql)
         try:
             cur = db.cursor()
             if hashs_get:
-                cur.execute(query_get, hashs_get)
+                cur.execute(query_get, [h.encode("hex") for h in hashs_get if h])
             if hashs_announce:
-                cur.execute(query_announce, hashs_announce)
+                cur.execute(query_announce, [h.encode("hex") for h in hashs_announce if h])
             db.commit()
             cur.close()
             db.close()
