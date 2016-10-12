@@ -29,6 +29,7 @@ hash_to_ignore = HashToIgnore()
 
 def on_torrent_announce(hash, url):
     global hash_to_ignore
+    return
     #print("doing %s" % hash)
     if not url.startswith("http://torcache.net/"):
         print("not on torcache")
@@ -67,15 +68,14 @@ def on_torrent_announce(hash, url):
             print("Error on %s: %r" % (hash, e))
     load_url(url, hash)
     
-replicator = Replicator(config.public_ip, pub_port=config.replication_tcp_port, priv_port=config.replication_udp_port,
-                        dht_port=config.replication_dht_port, on_torrent_announce=on_torrent_announce, dht_id=get_id("feed.id"),
-                        bootstrap_port=config.bootstrap_port)
+#replicator = Replicator(config.public_ip, pub_port=config.replication_tcp_port, priv_port=config.replication_udp_port,
+#                        dht_port=config.replication_dht_port, on_torrent_announce=on_torrent_announce, dht_id=get_id("feed.id"),
+#                        bootstrap_port=config.bootstrap_port)
 
 def announce(hash, url=None):
     if url is None:
         url = "http://torcache.net/torrent/%s.torrent" % hash.upper()
     hash_to_ignore.add(hash.decode("hex"))
-    replicator.announce_torrent(hash, url)
 socket.setdefaulttimeout(3)
 
 def widget(what=""):
@@ -654,22 +654,11 @@ def loop():
     db.close()
     last_loop = 0
     loop_interval = 300
-    replicator.start()
     try:
-        replicator.dht.load("feed.dht")
-        print("waiting for replicator")
-        while not replicator._ready:
-            time.sleep(1)
-            sys.stdout.write(".")
-            sys.stdout.flush()
-        print("OK")
-
         while True:
             try:
                 last_loop = time.time()
                 print("\n\n\nNEW LOOP")
-                if not replicator.is_alive():
-                    return
                 get_new_torrent()
                 db = MySQLdb.connect(**config.mysql)
                 update_torrent_file(db)
@@ -693,7 +682,6 @@ def loop():
                 compact_torrent(db)
                 if time.time() - last_clean > 60*15:
                     clean(db)
-                    replicator.dht.save("feed.dht")
                     last_clean = time.time()
                 db.commit()
                 sql_error = False
@@ -709,8 +697,6 @@ def loop():
                     pass
     finally:
         print("exiting")
-        replicator.dht.save("feed.dht")
-        replicator.stop()
 def upload_to_torcache(db, hash, quiet=False):
     files = {'torrent': open("%s/%s.torrent" % (config.torrents_dir, hash), 'rb')}
     r = requests.post('http://torcache.net/autoupload.php', files=files)
