@@ -325,6 +325,7 @@ def clean(db, hashs=None):
     db.commit()
 
 def is_torcache(hash):
+    return False
     resp = requests.head("http://torcache.net/torrent/%s.torrent" % hash.upper())
     return resp.status_code == 200
 
@@ -345,34 +346,9 @@ def fetch_torrent(db):
             update_db(db, hashs=[hash], quiet=True)
             counter[2]+=1
         else:
-            try:
-                url = "http://torcache.net/torrent/%s.torrent" % hash.upper()
-                response = urllib2.urlopen(url)
-                torrentz = response.read()
-                if torrentz:
-                    try:
-                        bi = io.BytesIO(torrentz)
-                        torrent = gzip.GzipFile(fileobj=bi, mode="rb").read()
-                        if torrent:
-                            open("%s/%s.torrent" % (config.torrents_dir, hash), 'wb+').write(torrent)
-                            update_db(db, hashs=[hash], torcache=True, quiet=True)
-                            counter[0]+=1
-                        else:
-                            print("Got empty response from torcache %s" % url)
-                            counter[1]+=1
-                    except (gzip.zlib.error, OSError) as e:
-                        print("%r" % e)
-                        counter[1]+=1
-                else:
-                    print("Got empty response from torcache %s" % url)
-                    counter[1]+=1
-            except urllib2.HTTPError:
-                cur.execute("UPDATE torrents SET torcache_notfound=%s WHERE hash=%s", (True, hash))
-                notfound.add(hash)
-                counter[1]+=1
-            except (EOFError,) as e:
-                print("Error on %s: %r" % (hash, e))
-                counter[1]+=1
+            cur.execute("UPDATE torrents SET torcache_notfound=%s WHERE hash=%s", (True, hash))
+            notfound.add(hash)
+            counter[1]+=1
         pbar.update(pbar.currval + 1)
 
     def process_hashs(qhashs, notfound, counter):
@@ -536,10 +512,13 @@ def update_db_torrent(db, cur, hash, torrent, id=None, torcache=None, quiet=Fals
             (name, created, files_nb, size, description) = infos
             if not config.generate_description:
                 description = None
-            if torcache is not None:
-                cur.execute("UPDATE torrents SET name=%s, description=%s, size=%s, files_count=%s, created_at=%s, visible_status=0, torcache=%s WHERE hash=%s", (name, description, size, files_nb, time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(created)), torcache, hash))
-            else:
-                cur.execute("UPDATE torrents SET name=%s, description=%s, size=%s, files_count=%s, created_at=%s, visible_status=0 WHERE hash=%s", (name, description, size, files_nb, time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(created)), hash))
+            try:
+                if torcache is not None:
+                    cur.execute("UPDATE torrents SET name=%s, description=%s, size=%s, files_count=%s, created_at=%s, visible_status=0, torcache=%s WHERE hash=%s", (name, description, size, files_nb, time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(created)), torcache, hash))
+                else:
+                    cur.execute("UPDATE torrents SET name=%s, description=%s, size=%s, files_count=%s, created_at=%s, visible_status=0 WHERE hash=%s", (name, description, size, files_nb, time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(created)), hash))
+            except Exception as error:
+                print "update_db_torrent:%r" % error
             if not quiet:
                 print("\r  done %s" % name)
             return True
@@ -698,6 +677,7 @@ def loop():
     finally:
         print("exiting")
 def upload_to_torcache(db, hash, quiet=False):
+    return False
     files = {'torrent': open("%s/%s.torrent" % (config.torrents_dir, hash), 'rb')}
     r = requests.post('http://torcache.net/autoupload.php', files=files)
     cur = db.cursor()
