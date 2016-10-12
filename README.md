@@ -1,8 +1,8 @@
-openbay crawler
-===============
+bittorent DHT crawler
+=====================
 
 A bittorrent mainline dht crawler that fetch torrents files via the
-[magnet system](http://www.bittorrent.org/beps/bep_0009.html) or torcache.
+[magnet system](http://www.bittorrent.org/beps/bep_0009.html).
 It runs multiple instance of the dht concurrently to be able to feed a database
 from the torrents currently downloaded within the dht.
 
