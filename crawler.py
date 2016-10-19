@@ -14,6 +14,10 @@ from threading import Thread, Lock
 from btdht import DHT, ID, RoutingTable
 from btdht.utils import enumerate_ids
 
+import pymongo
+from bson.binary import Binary
+
+
 import config
 import resource
 import torrent
@@ -21,32 +25,10 @@ import torrent
 class HashToIgnore(object):
     hash_to_ignore = set()
     hash_not_to_ignore = collections.defaultdict(int)
-    _db = collections.defaultdict(lambda:MySQLdb.connect(**config.mysql))
 
-    # One db connection by thread
-    @property
-    def db(self):
-        return self._db[threading.current_thread()]
+    def __init__(self):
+        self.db = pymongo.MongoClient()[config.mongo["db"]]["torrents"]
 
-    @db.setter
-    def db(self, value):
-        self._db[threading.current_thread()] = value
-
-    @db.deleter
-    def db(self):
-        try: self._db[threading.current_thread()].close()
-        except: pass
-        try: del self._db[threading.current_thread()]
-        except KeyError: pass
-
-
-    def init_db(self):
-        try: self.db.close()
-        except: pass
-        self.db = MySQLdb.connect(**config.mysql)
-        # SELECT statements are performed in a nonlocking fashion
-        self.db.cursor().execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
-        
 
     def add(self, item):
         self.hash_to_ignore.add(item)
@@ -59,7 +41,7 @@ class HashToIgnore(object):
         if not item in self.hash_to_ignore:
             if time.time() - self.hash_not_to_ignore[item] > 600:
                 try:
-                    if self.db.cursor().execute("select (1) from torrents where hash=%s AND created_at IS NOT NULL limit 1", (item.encode("hex"),)):
+                    if self.db.find({"_id": Binary(item), "status":{"$ne": 0}}).count() >  0:
                         self.hash_to_ignore.add(item)
                         try:
                             del self.hash_not_to_ignore[item]
@@ -69,13 +51,8 @@ class HashToIgnore(object):
                     else:
                         self.hash_not_to_ignore[item] = time.time()
                         return False
-                except (MySQLdb.Error,) as e:
-                    if errno > 5:
-                        print("%r" % e)
-                        raise
-                    else:
-                        self.init_db()
-                        return self.__contains__(item, errno=errno+1)
+                except pymongo.errors.AutoReconnect as e:
+                     return self.__contains__(item, errno=errno+1)
             else:
                 return False
         else:
@@ -89,6 +66,7 @@ class Crawler(DHT):
         self.db = None
         self.register_message("get_peers")
         self.register_message("announce_peer")
+        self.db = pymongo.MongoClient()[config.mongo["db"]]["torrents"]
 
     def stop(self):
         self.update_hash(None, None)
@@ -247,20 +225,12 @@ class Crawler(DHT):
             self.update_hash(info_hash, get=False)
 
     def get_hash_to_ignore(self, errornb=0):
-        db = MySQLdb.connect(**config.mysql)
         try:
-            cur = db.cursor()
-            cur.execute("SELECT UNHEX(hash) FROM torrents WHERE created_at IS NOT NULL")
-            hashs = set(r[0] for r in cur)
+            results = self.db.find({"status":{"$ne": 0}}, {"_id": True, "status": False})
+            hashs = set(r["status"] for r in results)
             self.debug(0, "Returning %s hash to ignore" % len(hashs))
-            cur.close()
-            db.close()
             return hashs
-        except (MySQLdb.Error, ) as e:
-            try:cur.close()
-            except:pass
-            try:db.close()
-            except:pass
+        except pymongo.errors.AutoReconnect as e::
             self.debug(0, "%r" % e)
             if errornb > 10:
                 raise
