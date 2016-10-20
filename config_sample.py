@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
-# mysql credentials
-mysql = {
-  "user": "piratebay",
-  "passwd": "PASSWORD",
-  "db":"piratebay",
-  "host":"localhost",
-  "charset":'utf8',
+
+# 0 no debug, 100 full debug
+debug = 0
+
+mongo = {
+  "db": "btdht-crawler",
 }
 
 # crawler udp base port. port will be choosen (deterministically)

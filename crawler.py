@@ -6,7 +6,6 @@ import time
 import psutil
 import socket
 import struct
-import MySQLdb
 import collections
 import multiprocessing
 import threading
@@ -41,7 +40,7 @@ class HashToIgnore(object):
         if not item in self.hash_to_ignore:
             if time.time() - self.hash_not_to_ignore[item] > 600:
                 try:
-                    if self.db.find({"_id": Binary(item), "status":{"$ne": 0}}).count() >  0:
+                    if self.db.find({"_id": Binary(item), "status":{"$nin": [0, None]}}).count() >  0:
                         self.hash_to_ignore.add(item)
                         try:
                             del self.hash_not_to_ignore[item]
@@ -226,11 +225,11 @@ class Crawler(DHT):
 
     def get_hash_to_ignore(self, errornb=0):
         try:
-            results = self.db.find({"status":{"$ne": 0}}, {"_id": True, "status": False})
+            results = self.db.find({"status":{"$nin": [0, None]}}, {"_id": True, "status": False})
             hashs = set(r["status"] for r in results)
             self.debug(0, "Returning %s hash to ignore" % len(hashs))
             return hashs
-        except pymongo.errors.AutoReconnect as e::
+        except pymongo.errors.AutoReconnect as e:
             self.debug(0, "%r" % e)
             if errornb > 10:
                 raise
@@ -250,26 +249,17 @@ class Crawler(DHT):
                 hashs_get = [h for h,g in self.root.update_hash if g]
                 hashs_announce = [h for h,g in self.root.update_hash if not g]
                 self.root.update_hash = set()
-        query_get = "INSERT INTO torrents (hash, visible_status, dht_last_get) VALUES %s ON DUPLICATE KEY UPDATE dht_last_get=NOW();" % ", ".join("(LOWER(%s),2,NOW())" for h in hashs_get if h)
-        query_announce = "INSERT INTO torrents (hash, visible_status, dht_last_announce) VALUES %s ON DUPLICATE KEY UPDATE dht_last_announce=NOW();" % ", ".join("(LOWER(%s),2,NOW())" for h in hashs_announce if h)
-        db = MySQLdb.connect(**config.mysql)
         try:
-            cur = db.cursor()
-            if hashs_get:
-                cur.execute(query_get, [h.encode("hex") for h in hashs_get if h])
-            if hashs_announce:
-                cur.execute(query_announce, [h.encode("hex") for h in hashs_announce if h])
-            db.commit()
-            cur.close()
-            db.close()
-        except (MySQLdb.Error, ) as e:
-            try:cur.close()
-            except:pass
-            try:db.commit()
-            except:pass
-            try:db.close()
-            except:pass
-            self.debug(0, "MYSQLERROR: %r, %s" % (e, errornb))
+            for h in hashs_get:
+                self.db.update({'_id': Binary(h)}, {'dht_last_get': int(time.time())}, upsert=True)
+            for h in hashs_announce:
+                self.db.update(
+                    {'_id': Binary(h)},
+                    {'dht_last_announce': int(time.time())},
+                    upsert=True
+                )
+        except pymongo.errors.AutoReconnect as e:
+            self.debug(0, "MONGOERROR: %r, %s" % (e, errornb))
 
     def determine_info_hash(self, hash):
         def callback(peers):
@@ -430,11 +420,10 @@ def worker(debug):
                     break
 
 if __name__ == '__main__':
-    debug = 0
-    #if sys.argv[1:]:
-    #    lauch(debug, sys.argv[1])
-    #else:
-    #    lauch(debug)
+    debug = config.debug
+    for dir in [config.torrents_dir, config.torrents_done, config.torrents_archive, config.torrents_new]:
+        if not os.path.isdir(dir):
+            os.mkdir(dir)
     if config.crawler_worker > 1:
         worker(debug)
     else:
