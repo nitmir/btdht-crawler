@@ -1,3 +1,4 @@
 btdht
 pymongo
 psutil
+chardet
