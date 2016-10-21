@@ -25,8 +25,11 @@ class HashToIgnore(object):
     hash_to_ignore = set()
     hash_not_to_ignore = collections.defaultdict(int)
 
-    def __init__(self):
-        self.db = pymongo.MongoClient()[config.mongo["db"]]["torrents"]
+    def __init__(self, db=None):
+        if db is None:
+            self.db = pymongo.MongoClient()[config.mongo["db"]]["torrents"]
+        else:
+            self.db = db
 
 
     def add(self, item):
@@ -39,6 +42,13 @@ class HashToIgnore(object):
     def __contains__(self, item, errno=0):
         if not item in self.hash_to_ignore:
             if time.time() - self.hash_not_to_ignore[item] > 600:
+                if os.path.isfile(os.path.join(config.torrents_dir, "%s.torrent" % item.encode("hex"))):
+                    self.hash_to_ignore.add(item)
+                    try:
+                        del self.hash_not_to_ignore[item]
+                    except KeyError:
+                        pass
+                    return True
                 try:
                     if self.db.find({"_id": Binary(item), "status":{"$nin": [0, None]}}).count() >  0:
                         self.hash_to_ignore.add(item)
@@ -62,25 +72,21 @@ class Crawler(DHT):
         super(Crawler, self).__init__(*args, **kwargs)
         if self.master:
             self.root.client = torrent.Client(debug=self.debuglvl>0)
-        self.db = None
         self.register_message("get_peers")
         self.register_message("announce_peer")
-        self.db = pymongo.MongoClient()[config.mongo["db"]]["torrents"]
 
     def stop(self):
         self.update_hash(None, None)
         if self.master:
             self.root.client.stoped = True
         super(Crawler, self).stop()
-        if self.db:
-            try:self.db.close()
-            except: pass
 
 
     def start(self):
         # doing some initialisation
         if self.master:
-            self.root.hash_to_ignore = HashToIgnore()
+            self.root.db = pymongo.MongoClient()[config.mongo["db"]]["torrents"]
+            self.root.hash_to_ignore = HashToIgnore(self.root.db)
             self.root.update_hash = set()
             self.root.update_hash_lock = Lock()
             self.root.bad_info_hash = {}
@@ -115,11 +121,15 @@ class Crawler(DHT):
             for hash in self.hash_to_fetch.keys():
                 if self.stoped:
                     return
-                if hash in self.root.client.meta_data or os.path.isfile("%s/%s.torrent" % (config.torrents_dir, hash.encode("hex"))):
+                if hash in self.root.client.meta_data or os.path.isfile(os.path.join(config.torrents_dir, "%s.torrent" % hash.encode("hex"))):
                     if hash in self.root.client.meta_data and self.root.client.meta_data[hash] is not True:
-                        with open("%s/%s.torrent.new" % (config.torrents_dir, hash.encode("hex")), 'wb') as f:
+                        with open(os.path.join(config.torrents_dir, "%s.torrent.new" % hash.encode("hex")), 'wb') as f:
                             f.write("d4:info%se" % self.root.client.meta_data[hash])
-                        os.rename("%s/%s.torrent.new" % (config.torrents_dir, hash.encode("hex")), "%s/%s.torrent" % (config.torrents_dir, hash.encode("hex"))) 
+                        os.rename(
+                            os.path.join(config.torrents_dir, "%s.torrent.new" % hash.encode("hex")),
+                            os.path.join(config.torrents_dir, "%s.torrent" % hash.encode("hex"))
+                        )
+                        self.root.db.update({'_id': Binary(hash)}, {"$set": {'status': 1}}, upsert=True)
                         self.debug(1, "%s downloaded" % hash.encode("hex"))
                     self.root.client.meta_data[hash] = True
                     self.root.client.clean_hash(hash)
@@ -225,7 +235,7 @@ class Crawler(DHT):
 
     def get_hash_to_ignore(self, errornb=0):
         try:
-            results = self.db.find({"status":{"$nin": [0, None]}}, {"_id": True, "status": False})
+            results = self.root.db.find({"status":{"$nin": [0, None]}}, {"_id": True, "status": False})
             hashs = set(r["status"] for r in results)
             self.debug(0, "Returning %s hash to ignore" % len(hashs))
             return hashs
@@ -251,11 +261,11 @@ class Crawler(DHT):
                 self.root.update_hash = set()
         try:
             for h in hashs_get:
-                self.db.update({'_id': Binary(h)}, {'dht_last_get': int(time.time())}, upsert=True)
+                self.root.db.update({'_id': Binary(h)}, {"$set": {'dht_last_get': int(time.time())}}, upsert=True)
             for h in hashs_announce:
-                self.db.update(
+                self.root.db.update(
                     {'_id': Binary(h)},
-                    {'dht_last_announce': int(time.time())},
+                    {"$set": {'dht_last_announce': int(time.time())}},
                     upsert=True
                 )
         except pymongo.errors.AutoReconnect as e:
