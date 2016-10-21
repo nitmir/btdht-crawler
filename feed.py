@@ -4,6 +4,12 @@
 #resource.setrlimit(resource.RLIMIT_CPU, (60*2, -1))
 import os
 import sys
+
+
+print "This script is deprecated, use feed2.py"
+sys.exit(1)
+
+
 import io
 import gzip
 import MySQLdb
