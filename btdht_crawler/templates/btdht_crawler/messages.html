@@ -1,0 +1,17 @@
+            {% for message in messages %}
+                <div {% spaceless %}
+                    {% if message.level == message_levels.DEBUG %}
+                        class="alert alert-warning"
+                    {% elif message.level == message_levels.INFO %}
+                        class="alert alert-info"
+                    {% elif message.level == message_levels.SUCCESS %}
+                        class="alert alert-success"
+                    {% elif message.level == message_levels.WARNING %}
+                        class="alert alert-warning"
+                    {% else %}
+                        class="alert alert-danger"
+                    {% endif %}
+                {% endspaceless %}>
+                    <p>{{message|safe}}</p>
+                </div>
+            {% endfor %}

@@ -1,0 +1,14 @@
+{% extends "btdht_crawler/base.html" %}
+{% load i18n %}
+{% load btdht_crawler %}
+
+{% block content2 %}
+<h1>Recent torrents</h1>
+{% include "btdht_crawler/torrent_table.html" %}
+{% endblock %}
+
+{% block javascript_inline %}
+$(document).ready(function () {
+    $(".pagination").rPage();
+});
+{% endblock %}

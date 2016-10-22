@@ -2,3 +2,5 @@ btdht
 pymongo
 psutil
 chardet
+
+Django

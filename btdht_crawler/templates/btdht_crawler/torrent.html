@@ -1,0 +1,62 @@
+{% extends "btdht_crawler/base.html" %}
+{% load i18n %}
+{% load btdht_crawler %}
+
+{% block content2 %}
+<br/>
+<h1>Torrent infos</h1>
+<table class="table">
+<tr><th>Name</th><td>{{torrent.name}}</td></tr>
+<tr><th>Files</th><td>{% if torrent.files %}<a href="#torrent_files">{{torrent.file_nb}}</a>{% else %}{{torrent.file_nb}}{% endif %}</td></tr>
+<tr><th>Size</th><td>{{torrent.size_pp}} ({{torrent.size}} Bytes)</td></tr>
+<tr><th>Uploaded</th><td>{{torrent.created_pp}}</td></tr>
+<tr><th>Info Hash</th><td>{{torrent.hex_hash.upper}}</td></tr>
+</table>
+<h2>Torrent status</h2>
+<p class="pull-left">Last scrape at {{torrent.last_scrape|date_pp}}.</p>
+<form method="post" class="pull-left">
+{% csrf_token %}
+<input type="hidden" name="scrape" value="1"/>
+<a href="#" onclick="$(this).closest('form').submit();"><span class="glyphicon glyphicon-refresh"></span></a>
+</form>
+<table class="table">
+<tr><th>Seeders</th><td>{{torrent.seeds}}</td></tr>
+<tr><th>Leechers</th><td>{{torrent.peers}}</td></tr>
+<tr><th>Completed</th><td>{{torrent.complete}}</td></tr>
+</table>
+<h2>Download Links</h2>
+<div class="row">
+  <div class="col-lg-3 col-md-3 col-sm-2 col-xs-0"></div>
+  <div class="col-lg-6 col-md-6 col-sm-8 col-xs-12">
+    <ul class="list-group">
+      <li class="list-group-item">
+        <a href="{{torrent.magnet}}">
+          <button type="button" class="btn btn-success btn-block btn-lg">
+            <span class="glyphicon glyphicon-magnet" aria-hidden="true"></span> Magnet
+          </button>
+        </a>
+      </li>
+      {% if torrent.url %}
+      <li class="list-group-item">
+        <a href="{{torrent.url}}">
+          <button type="button" class="btn btn-info btn-block btn-lg">
+            <span class="glyphicon glyphicon-download-alt" aria-hidden="true"></span> Torrent file
+          </button>
+        </a>
+      </li>
+      {% endif %}
+    </ul>
+  </div>
+  <div class="col-lg-3 col-md-3 col-sm-2 col-xs-0"></div>
+</div>
+{% if torrent.files %}
+<h2 id="torrent_files">Torrent Files</h2>
+<table class="table table-striped table-condensed table-responsive">
+<tr><th>Path</th><th>Size</th></tr>
+{% for file in torrent.files %}
+<tr><td>{{file.path}}</td><td class="text-nowrap">{{file.size|size_pp}}</td></tr>
+{% endfor %}
+</table>
+{% endif %}
+{% endblock %}
+

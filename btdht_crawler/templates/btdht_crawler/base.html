@@ -1,0 +1,51 @@
+{% load i18n %}{% load staticfiles %}{% get_current_language as LANGUAGE_CODE %}<!DOCTYPE html>
+<html{% if LANGUAGE_CODE %} lang="{{LANGUAGE_CODE}}"{% endif %}>
+    <head>
+        <meta charset="utf-8">
+        <!--[if IE]><meta http-equiv="X-UA-Compatible" content="IE=edge" /><![endif]-->
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>{% block title %}{% trans "BTDHT Torrent Search"  %}{% endblock %}</title>
+        <link href="{{settings.BTDHT_COMPONENT_URLS.bootstrap3_css}}" rel="stylesheet">
+        <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+        <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+        <!--[if lt IE 9]>
+        <script src="{{settings.BTDHT_COMPONENT_URLS.html5shiv}}"></script>
+        <script src="{{settings.BTDHT_COMPONENT_URLS.respond}}"></script>
+        <![endif]-->
+        {% if settings.BTDHT_FAVICON_URL %}<link rel="shortcut icon" href="{{settings.BTDHT_FAVICON_URL}}" />{% endif %}
+        <link href="{% static "btdht_crawler/styles.css" %}" rel="stylesheet">
+    </head>
+    <body>
+    {% include "btdht_crawler/navbar.html" %}
+      <div id="wrap">
+        <div class="container">
+           {% block container %}
+           {% block pre_content %}{% endblock %}
+            <div class="row">
+            <div class="col-lg-3 col-md-3 col-sm-2 col-xs-0"></div>
+            <div class="col-lg-6 col-md-6 col-sm-8 col-xs-12">
+            {% include "btdht_crawler/messages.html" %}
+            {% block content %}{% endblock %}
+            </div>
+            <div class="col-lg-3 col-md-3 col-sm-2 col-xs-0"></div>
+            </div>
+            <div class="row">{% block content2 %}{% endblock %}</div>
+        {% endblock %}
+        </div> <!-- /container -->
+      </div>
+      <div style="clear: both;"></div>
+      <script src="{{settings.BTDHT_COMPONENT_URLS.jquery}}"></script>
+      <script src="{{settings.BTDHT_COMPONENT_URLS.bootstrap3_js}}"></script>
+      <script src="{% static "btdht_crawler/responsive-paginate.js" %}"></script>
+      <script type="text/javascript">
+{% block javascript_inline %}{% endblock %}
+</script>
+      {% block javascript %}{% endblock %}
+    </body>
+</html>
+<!--
+Powered by django-btdht-crawler version {{VERSION}}
+
+Pypi: https://pypi.python.org/pypi/django-btdht-crawler
+github: https://github.com/nitmir/django-btdht-crawler
+-->

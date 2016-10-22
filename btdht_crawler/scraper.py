@@ -5,7 +5,7 @@ try:
 except ImportError:
     from urlparse import urlparse, urlunsplit
    
-def scrape(tracker, hashes):
+def scrape(tracker, hashes, udp_timeout=1):
 	"""
 	Returns the list of seeds, peers and downloads a torrent info_hash has, according to the specified tracker
 
@@ -25,7 +25,7 @@ def scrape(tracker, hashes):
 	tracker = tracker.lower()
 	parsed = urlparse(tracker)	
 	if parsed.scheme == "udp":
-		return scrape_udp(parsed, hashes)
+		return scrape_udp(parsed, hashes, timeout=udp_timeout)
 
 	if parsed.scheme in ["http", "https"]:
 		if "announce" not in tracker:
@@ -35,14 +35,14 @@ def scrape(tracker, hashes):
 
 	raise RuntimeError("Unknown tracker scheme: %s" % parsed.scheme)	
 
-def scrape_udp(parsed_tracker, hashes):
+def scrape_udp(parsed_tracker, hashes, timeout=1):
 	#print("Scraping UDP: %s for %s hashes" % (parsed_tracker.geturl(), len(hashes)))
 	if len(hashes) > 74:
 		raise RuntimeError("Only 74 hashes can be scraped on a UDP tracker due to UDP limitations")
 	transaction_id = "\x00\x00\x04\x12\x27\x10\x19\x70";
 	connection_id = "\x00\x00\x04\x17\x27\x10\x19\x80";
 	sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-	sock.settimeout(8)
+	sock.settimeout(timeout)
 	conn = (socket.gethostbyname(parsed_tracker.hostname), parsed_tracker.port)
 	
 	#Get connection ID
@@ -61,8 +61,7 @@ def scrape_http(parsed_tracker, hashes):
 	print("Scraping HTTP: %s for %s hashes" % (parsed_tracker.geturl(), len(hashes)))
 	qs = []
 	for hash in hashes:
-		url_param = binascii.a2b_hex(hash)
-		qs.append(("info_hash", url_param))
+		qs.append(("info_hash", hash))
 	qs = urllib.urlencode(qs)
 	pt = parsed_tracker	
 	url = urlunsplit((pt.scheme, pt.netloc, pt.path, qs, pt.fragment))
@@ -72,11 +71,10 @@ def scrape_http(parsed_tracker, hashes):
 	decoded = bdecode(handle.read())
 	ret = {}
 	for hash, stats in decoded['files'].iteritems():		
-		nice_hash = binascii.b2a_hex(hash)		
 		s = stats["complete"]
 		p = stats["incomplete"]
 		c = stats["downloaded"]
-		ret[nice_hash] = { "seeds" : s, "peers" : p, "complete" : c}		
+		ret[hash] = { "seeds" : s, "peers" : p, "complete" : c}		
 	return ret
 
 def udp_create_connection_request():
@@ -114,8 +112,7 @@ def udp_create_scrape_request(connection_id, hashes):
 	buf += struct.pack("!i", transaction_id) #followed by 4 byte transaction id
 	#from here on, there is a list of info_hashes. They are packed as char[]
 	for hash in hashes:		
-		hex_repr = binascii.a2b_hex(hash)
-		buf += struct.pack("!20s", hex_repr)
+		buf += struct.pack("!20s", hash)
 	return (buf, transaction_id)
 
 def udp_parse_scrape_response(buf, sent_transaction_id, hashes):	

@@ -1,0 +1,36 @@
+{% if torrents %}
+<table class="table table-striped table-condensed table-responsive">
+<tr><th></th><th width="100%">Name</th><th>Size</th><th>Created</th><th>Files</th><th>seeds</th><th>peers</th></tr>
+{% for t in torrents %}
+<tr>
+  <td class="text-nowrap">
+    <a title="magnet link" href="{{t.magnet}}">
+      <span class="glyphicon glyphicon-magnet" aria-hidden="true"></span>
+    </a>
+    <a title="download the torrent file" href="{% url "btdht_crawler:download_torrent" t.hex_hash t.name %}">
+      <span class="glyphicon glyphicon-download-alt" aria-hidden="true"></span>
+    </a>
+  </td>
+  <td><a href="{% url "btdht_crawler:info_torrent" t.hex_hash t.name %}">{{t.name}}</a></td>
+  <td class="text-nowrap">{{t.size_pp}}</td>
+  <td class="text-nowrap">{{t.created_pp}}</td>
+  <td class="text-nowrap">{{t.file_nb}}</td>
+  <td class="text-nowrap">{% if t.seeds is not None %}{{t.seeds}}{% endif %}</td>
+  <td class="text-nowrap">{% if t.peers is not None %}{{t.peers}}{% endif %}</td>
+</tr>
+{% endfor %}
+</table>
+{% endif %}
+
+<div class="text-center">
+<nav aria-label="...">
+  <ul class="pagination pagination-sm">
+    {% for page in torrents.pages %}
+        <li{% if page.class %} class="{{page.class}}"{% endif %}>
+          {% if page.url %}<a href="{{page.url}}">{{page.name|safe}}</a>{% else %}<span>{{page.name|safe}}</span>{% endif %}
+        </li>
+    {% endfor %}
+  </ul>
+</nav>
+</div>
+
