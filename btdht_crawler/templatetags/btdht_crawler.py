@@ -14,7 +14,7 @@ from django import forms
 
 from datetime import datetime
 
-from ..utils import format_size
+from ..utils import format_size, format_date, absolute_url as utils_absolute_url
 
 register = template.Library()
 
@@ -48,5 +48,15 @@ def size_pp(size):
     return format_size(size)
 
 @register.filter(name='date_pp')
-def date_pp(timestamps):
-    return datetime.fromtimestamp(timestamps).strftime('%Y-%m-%d %H:%M:%S')
+def date_pp(timestamp):
+    return format_date(timestamp)
+
+
+@register.filter(name='replace')
+def replace(value, arg):
+    (match, rep) = arg.split(':')
+    return value.replace(match, rep)
+
+@register.filter(name='absolute_url')
+def absolute_url(path, request):
+    return utils_absolute_url(request, path)

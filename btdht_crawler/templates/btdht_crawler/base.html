@@ -4,7 +4,7 @@
         <meta charset="utf-8">
         <!--[if IE]><meta http-equiv="X-UA-Compatible" content="IE=edge" /><![endif]-->
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>{% block title %}{% trans "BTDHT Torrent Search"  %}{% endblock %}</title>
+        <title>{% block title %}{% trans "BTDHT Search"  %}{% endblock %}</title>
         <link href="{{settings.BTDHT_COMPONENT_URLS.bootstrap3_css}}" rel="stylesheet">
         <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
         <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
@@ -14,6 +14,7 @@
         <![endif]-->
         {% if settings.BTDHT_FAVICON_URL %}<link rel="shortcut icon" href="{{settings.BTDHT_FAVICON_URL}}" />{% endif %}
         <link href="{% static "btdht_crawler/styles.css" %}" rel="stylesheet">
+        {% block extra_head %}{% endblock %}
     </head>
     <body>
     {% include "btdht_crawler/navbar.html" %}
@@ -29,18 +30,18 @@
             </div>
             <div class="col-lg-3 col-md-3 col-sm-2 col-xs-0"></div>
             </div>
-            <div class="row">{% block content2 %}{% endblock %}</div>
+            <div class="row" id="content2">{% block content2 %}{% endblock %}</div>
         {% endblock %}
         </div> <!-- /container -->
-      </div>
-      <div style="clear: both;"></div>
+       </div>
+     <div style="clear: both;"></div>
       <script src="{{settings.BTDHT_COMPONENT_URLS.jquery}}"></script>
       <script src="{{settings.BTDHT_COMPONENT_URLS.bootstrap3_js}}"></script>
       <script src="{% static "btdht_crawler/responsive-paginate.js" %}"></script>
+      {% block javascript %}{% endblock %}
       <script type="text/javascript">
 {% block javascript_inline %}{% endblock %}
 </script>
-      {% block javascript %}{% endblock %}
     </body>
 </html>
 <!--

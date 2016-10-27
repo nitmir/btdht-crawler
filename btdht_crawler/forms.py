@@ -38,4 +38,10 @@ class BootsrapForm(forms.Form):
 
 
 class SearchForm(BootsrapForm):
-    query = forms.CharField(label="")
+    query = forms.CharField(
+        label="",
+        widget=forms.TextInput(attrs={
+            'autofocus': 'autofocus',
+            'placeholder': 'Search here',
+        })
+    )

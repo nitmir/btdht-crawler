@@ -12,15 +12,29 @@
 """urls for the app"""
 from django.conf.urls import url
 
+from .utils import require_login, token_auth
+
 import views
 
 app_name = "btdht_crawler"
 
 urlpatterns = [
-    url('^$', views.index, name='index'),
-    url('^2/(?P<page>[0-9]+)/(?P<query>.*)$', views.index, name='index_query'),
-    url('^0/(?P<hex_hash>[0-9a-f]{40})/(?P<name>.*)\.torrent$', views.download_torrent, name='download_torrent'),
-    url('^1/(?P<hex_hash>[0-9a-f]{40})/(?P<name>.*)$', views.info_torrent, name='info_torrent'),
-    url('^recent$', views.recent, name='recent_index'),
-    url('^recent/(?P<page>[0-9]+)$', views.recent, name='recent'),
+    url('^$', require_login(views.index), name='index'),
+    url('^download/(?P<hex_hash>[0-9A-Fa-f]{40})/(?P<name>.*)\.torrent$', require_login(views.download_torrent), name='download_torrent'),
+    url('^(?P<token>[0-9A-Fa-f]{32})/download/(?P<hex_hash>[0-9A-Fa-f]{40})/(?P<name>.*)\.torrent$', token_auth(views.download_torrent), name='download_torrent'),
+    url('^torrent/(?P<hex_hash>[0-9A-Fa-f]{40})/(?P<name>.*)$', require_login(views.info_torrent), name='info_torrent'),
+    url('^torrent/(?P<hex_hash>[0-9A-Fa-f]{40}).json$', require_login(views.api_info_torrent), name='api_info_torrent'),
+    url('^(?P<token>[0-9A-Fa-f]{32})/torrent/(?P<hex_hash>[0-9A-Fa-f]{40}).json$', token_auth(views.api_info_torrent), name='api_info_torrent_token'),
+    url('^search/(?P<query>.*)/(?P<page>[0-9]+)/(?P<order_by>[1-7])/(?P<asc>[0-1])$', require_login(views.index), name='index_query'),
+    url('^search/(?P<query>.*)/(?P<page>[0-9]+).json', require_login(views.api_search), name='api_search'),
+    url('^(?P<token>[0-9A-Fa-f]{32})/search/(?P<query>.*)/(?P<page>[0-9]+).json', token_auth(views.api_search), name='api_search_token'),
+    url('^recent$', require_login(views.recent), name='recent_index'),
+    url('^recent.json$', require_login(views.api_recent), name='api_recent_index'),
+    url('^recent/(?P<page>[0-9]+)$', require_login(views.recent), name='recent'),
+    url('^recent/(?P<page>[0-9]+).json', require_login(views.api_recent), name='api_recent'),
+    url('^(?P<token>[0-9A-Fa-f]{32})/recent.json$', token_auth(views.api_recent), name='api_recent_index_token'),
+    url('^(?P<token>[0-9A-Fa-f]{32})/recent/(?P<page>[0-9]+).json', token_auth(views.api_recent), name='api_recent_token'),
+    url('^stats$', require_login(views.stats), name='stats'),
+    url('^api$', require_login(views.api), name='api'),
+    url('^about$', require_login(views.about), name='about'),
 ]

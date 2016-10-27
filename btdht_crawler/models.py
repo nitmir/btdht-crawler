@@ -2,25 +2,61 @@ from __future__ import unicode_literals
 from .settings import settings
 
 from django.db import models
-from django.urls import reverse
+from django.core.urlresolvers import reverse
 
 import os
 import urllib
 import time
 import re
-from datetime import datetime, timedelta
+from datetime import timedelta
 from bson.binary import Binary
 
-from .utils import getdb, format_size, scrape
+from .utils import getdb, format_size, format_date, scrape, random_token, absolute_url
+import const
+
+
+class UserPref(models.Model):
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, unique=True)
+    token = models.CharField(max_length=32, unique=True, default=random_token)
+
 
 class TorrentsList(object):
 
-    def __init__(self, cursor, url, page=1):
+    torrents = None
+    order_by = None
+    order_url = None
+    asc = True
+
+    def __init__(self, cursor, url, page=1, max_results=None, order_by=None, asc=True, order_url=None):
+        self.order_url = order_url
+        if order_by:
+            self.order_by = order_by
+            self.asc = asc
+            if order_by == const.ORDER_BY_SCORE:
+                cursor = cursor.sort([("score", {"$meta": "textScore" })])
+            elif order_by == const.ORDER_BY_NAME:
+                cursor = cursor.sort([("name", 1 if asc else -1)])
+            elif order_by == const.ORDER_BY_SIZE:
+                cursor = cursor.sort([("size", 1 if asc else -1)])
+            elif order_by == const.ORDER_BY_CREATED:
+                cursor = cursor.sort([("created", 1 if asc else -1)])
+            elif order_by == const.ORDER_BY_FILES:
+                cursor = cursor.sort([("file_nb", 1 if asc else -1)])
+            elif order_by == const.ORDER_BY_PEERS:
+                 cursor = cursor.sort([("peers", 1 if asc else -1)])
+            elif order_by == const.ORDER_BY_SEEDS:
+                 cursor = cursor.sort([("seeds", 1 if asc else -1)])
+            else:
+                self.order_by = None
         skip = settings.BTDHT_PAGE_SIZE * (page - 1)
         limit = settings.BTDHT_PAGE_SIZE
         self.page = page
         self._cursor = cursor.skip(skip).limit(limit)
-        self.size = cursor.count()
+        if max_results is not None:
+            self.size = min(cursor.count(), max_results)
+        else:
+            self.size = cursor.count()
         self.start = skip
         self.end = skip + limit if limit > 0 else self.size
 
@@ -31,21 +67,60 @@ class TorrentsList(object):
 
         self.url = url
 
-    def __iter__(self):
-        torrents = []
-        to_scrape = []
-        for result in self._cursor:
-            torrents.append(result)
-            if not 'last_scrape' in result or result['last_scrape'] == 0 or (time.time() - result['last_scrape']) > settings.BTDHT_SCRAPE_MIN_INTERVAL:
-                to_scrape.append(str(result['_id']))
-        if to_scrape:
-            scrape_result = scrape(to_scrape)
-            for result in torrents:
-                result.update(scrape_result.get(str(result['_id']), {}))
-                yield Torrent(obj=result, no_files=True)
+    def _url_sort_by(self, field, prefere_asc=True):
+        if self.order_url is None:
+            return None
+        if self.order_by == field:
+            asc = '0' if self.asc else '1'
         else:
-            for result in torrents:
-                yield Torrent(obj=result, no_files=True)
+            asc = '1' if prefere_asc else '0'
+        return self.order_url(field, asc)
+
+    def url_sort_by_score(self):
+        return self._url_sort_by(const.ORDER_BY_SCORE)
+
+    def url_sort_by_name(self):
+        return self._url_sort_by(const.ORDER_BY_NAME)
+
+    def url_sort_by_size(self):
+        return self._url_sort_by(const.ORDER_BY_SIZE)
+
+    def url_sort_by_created(self):
+        return self._url_sort_by(const.ORDER_BY_CREATED)
+
+    def url_sort_by_files(self):
+        return self._url_sort_by(const.ORDER_BY_FILES)
+
+    def url_sort_by_peers(self):
+        return self._url_sort_by(const.ORDER_BY_PEERS, False)
+
+    def url_sort_by_seeds(self):
+        return self._url_sort_by(const.ORDER_BY_SEEDS, False)
+
+    def __iter__(self):
+        if self.torrents is None:
+            self.torrents = []
+            torrents = []
+            to_scrape = []
+            for result in self._cursor:
+                torrents.append(result)
+                if not 'last_scrape' in result or result['last_scrape'] == 0 or (time.time() - result['last_scrape']) > settings.BTDHT_SCRAPE_BROWSE_INTERVAL:
+                    to_scrape.append(str(result['_id']))
+            if to_scrape:
+                scrape_result = scrape(to_scrape)
+                for result in torrents:
+                    result.update(scrape_result.get(str(result['_id']), {}))
+                    torrent = Torrent(obj=result, no_files=True)
+                    self.torrents.append(torrent)
+                    yield torrent
+            else:
+                for result in torrents:
+                    torrent = Torrent(obj=result, no_files=True)
+                    self.torrents.append(torrent)
+                    yield torrent
+        else:
+            for torrent in self.torrents:
+                yield torrent
 
     def pages(self):
         if self.has_previous_page():
@@ -88,7 +163,9 @@ class TorrentsList(object):
 
     def show_end_suspension(self):
         return self.end_page < (self.last_page - 1)
-        
+
+    def data(self, request):
+        return [torrent.data(request) for torrent in self]
 
 
 # Create your models here.
@@ -109,27 +186,59 @@ class Torrent(object):
 
     last_scrape = 0
 
+    def data(self, request):
+        is_auth = request.user.is_authenticated()
+        if settings.BTDHT_REQUIRE_AUTH and not is_auth:
+            return {}
+        data = {
+            'hash': self.hash.encode('hex'),
+            'name': self.name,
+            'created': self.created,
+            'file_nb': self.file_nb,
+            'size': self.size,
+            'seeds': self.seeds,
+            'peers': self.peers,
+            'complete': self.complete,
+            'last_scrape': self.last_scrape
+        }
+        if self.files is not None:
+            data['files'] = self.files
+        if self.score is not None:
+            data['score'] = self.score
+        if not settings.BTDHT_HIDE_MAGNET_FROM_UNAUTH or is_auth:
+            data['magnet'] = self.magnet
+        if not settings.BTDHT_HIDE_TORRENT_LINK_FROM_UNAUTH or is_auth:
+            data['url'] = self.url
+        return data
+
     @staticmethod
-    def search(query, page=1):
+    def search(query, page=1, order_by=const.ORDER_BY_SCORE, asc=True):
         db = getdb()
         if re.match("^[0-9A-Fa-f]{40}$", query):
             results = db.find(
                 {"$or": [
-                    {"$text": {"$search": query}},
-                    {"_id": query}
+                    {"$text": {"$search": query, '$language': "none"}},
+                    {"_id": Binary(query.decode("hex"))}
                 ]},
                 {"score": {"$meta": "textScore" }, 'files': False}
                
-            ).sort([("score", {"$meta": "textScore" })])
+            )
         else:
             results = db.find(
-                {"$text": {"$search": query}},
-                {"score": {"$meta": "textScore" }}
-            ).sort([("score", {"$meta": "textScore" })])
-        return TorrentsList(results, url=lambda page:reverse("btdht_crawler:index_query", args=[page, query]), page=page)
+                {"$text": {"$search": query, '$language': "none"}},
+                {"score": {"$meta": "textScore" }, 'files': False}
+            )
+        return TorrentsList(
+            results,
+            url=lambda page:reverse("btdht_crawler:index_query", kwargs=dict(page=page, query=query, order_by=order_by, asc=1 if asc else 0)) + '#results',
+            order_url=lambda order_by, asc:reverse("btdht_crawler:index_query", kwargs=dict(page=page, query=query, order_by=order_by, asc=asc)) + '#results',
+            page=page,
+            order_by=order_by,
+            asc=asc
+        )
 
     @staticmethod
-    def recent(page):
+    def recent(page, max_results=None):
         db = getdb()
         results = db.find(
             {},
@@ -137,11 +246,15 @@ class Torrent(object):
         ).sort(
             [("created", -1)]
         )
-        return TorrentsList(results, url=lambda page:reverse("btdht_crawler:recent", args=[page]), page=page)
+        return TorrentsList(
+            results,
+            url=lambda page:reverse("btdht_crawler:recent", args=[page]) + '#recent', page=page, max_results=max_results
+        )
 
     def __init__(self, hash=None, obj=None, no_files=False):
         if obj is None and hash is not None:
             db = getdb()
+
             results = db.find({"_id": Binary(hash)})
             if results.count() != 1:
                 raise ValueError("Torrent for hash %r not found" % hash)
@@ -205,7 +318,7 @@ class Torrent(object):
 
     @property
     def created_pp(self):
-        return datetime.fromtimestamp(self.created).strftime('%Y-%m-%d %H:%M:%S')
+        return format_date(self.created)
 
     @property
     def created_delta(self):

@@ -2,8 +2,22 @@
 {% load i18n %}
 {% load btdht_crawler %}
 
+{% block title %}{% trans "BTDHT | recent torrents"  %}{% endblock %}
+
+{% block pre_content %}
+<div class="row">
+              <div class="col-lg-12 col-md-12 col-sm-12 col-xs-12">
+                <h1 id="app-name">
+                    {% if settings.BTDHT_LOGO_URL %}<img src="{{settings.BTDHT_LOGO_URL}}" alt="btdht-logo" />{% endif %}
+                    {% trans "BTDHT Search" %}
+                </h1>
+              </div>
+            </div>
+{% endblock %}
+
+
 {% block content2 %}
-<h1>Recent torrents</h1>
+<h1 id="recent">Recent torrents</h1>
 {% include "btdht_crawler/torrent_table.html" %}
 {% endblock %}
 

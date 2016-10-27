@@ -1,0 +1,97 @@
+{% extends "btdht_crawler/base.html" %}
+{% load i18n %}
+{% load staticfiles %}
+{% block title %}BTDHT | Statistics{% endblock %}
+{% block content2 %}
+<h1>Statistics</h1>
+<h2>Torrent chart</h2>
+<canvas id="myChart" height="400" width="1000"></canvas>
+
+<h2>Tracker scrape</h2>
+<p>
+Leecher/seeders/complete info are retreived from the trackers bellow.
+The result from the tracker with the maximum leecher/seeders/complete is displayed.
+</p>
+<h3>Trackers that respond to scrape requests</h3>
+{% if good_tracker %}
+<ul>
+{% for tracker in good_tracker %}
+<li>{{tracker}}</li>
+{% endfor%}
+</ul>
+{% endif %}
+<h3>Trackers that do NOT respond to scrape requests</h3>
+{% if bad_tracker %}
+<ul>
+{% for tracker in bad_tracker %}
+<li>{{tracker}}</li>
+{% endfor%}
+</ul>
+{% endif %}
+{% endblock %}
+
+
+{% block javascript %}
+<script src="{{settings.BTDHT_COMPONENT_URLS.chart_js}}"></script>
+{% endblock %}
+
+
+{% block javascript_inline %}
+//$("#myChart").attr("height", $("#wrap").height() - 300);
+var ctx = document.getElementById("myChart");
+var myChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+        labels: {{times|safe}},
+        datasets: [
+          {
+            label: '# indexed torrents',
+            data: {{torrent_indexed|safe}},
+            fill: true,
+            backgroundColor: "rgba(239, 83, 80, 0.5)",
+            borderColor: "rgba(239, 83, 80, 1)",
+            pointBorderColor: "transparent",
+            pointBackgroundColor: "transparent",
+            pointHoverBackgroundColor: "rgba(183, 28, 28, 1)",
+            pointHoverBorderColor: "rgba(183, 28, 28, 1)",
+             
+          },
+{% comment %}
+          {
+            label: '# tracked torrent hashes',
+            data: {{hash_tracked|safe}},
+            fill: true,
+            //backgroundColor: "rgba(66, 165, 245, 0.5)",
+            //borderColor: "rgba(66, 165, 245, 1)",
+            //pointBorderColor: "rgba(66, 165, 245, 1)",
+            //pointBackgroundColor: "rgba(66, 165, 245, 1)",
+            //pointHoverBackgroundColor: "rgba(21, 101, 192, 1)",
+            //pointHoverBorderColor: "rgba(21, 101, 192, 1)",
+            
+          },
+{% endcomment %}
+        ]
+    },
+    options: {
+        maintainAspectRatio: false,
+        responsive: false,
+        scales: {
+            yAxes: [{
+                ticks: {
+                    beginAtZero:true
+                }
+            }],
+            xAxes: [{
+                type: 'time',
+                time: {
+                    parser: 'YYYY-MM-DD HH:mm:ss Z',
+                    displayFormats: {
+                        minute: 'HH:mm',
+                        hour: 'MMM D, H\\h',
+                    }
+                }
+            }]
+        }
+    }
+});
+{% endblock %}

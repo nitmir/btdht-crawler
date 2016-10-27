@@ -1,0 +1,28 @@
+{% extends "btdht_crawler/base.html" %}
+{% load i18n %}
+{% load btdht_crawler %}
+
+{% block title %}BTDHT | About{% endblock %}
+
+{% block content2 %}
+<h1>Overview</h1>
+<p>
+<a href="{{""|absolute_url:request}}">BTDHT Search</a> is a BitTorrent DHT search engine.<br/>
+BitTorrent is a file sharing protocol.</br>
+A DHT stand for Distributed Hash Table, the bittorent DHT, is a decentralized database used to find
+peers distributing content.</br>
+A torrent is a file with metadata which describes distributed content.
+</p>
+
+<p>
+BTDHT Search's database is formed by DHT users.<br/>
+BTDHT Search participates in the bittorent DHT network and follows the bittorent DHT protocol specification.</br>
+The project name is an acronym for Bittorrent Distributed Hash Table Search.
+</p>
+
+<p>
+BTDHT Search is not a tracker and doesn't store any content and only collects
+torrent metadata (such as file names and file sizes) and a magnet link (torrent identifier). 
+</p>
+{% endblock %}
+

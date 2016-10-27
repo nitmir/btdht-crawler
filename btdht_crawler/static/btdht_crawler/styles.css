@@ -3,18 +3,11 @@ html, body {
 }
 body {
   padding-top: 0px;
-  padding-bottom: 0;
+  padding-bottom: 0px;
   background-color: #eee;
 }
 
-.form-signin .form-signin-heading,
-.form-signin .checkbox {
-  margin-bottom: 10px;
-}
-.form-signin .checkbox {
-  font-weight: normal;
-}
-.form-signin .form-control {
+.form-search .form-control {
   position: relative;
   height: auto;
   -webkit-box-sizing: border-box;
@@ -23,53 +16,26 @@ body {
   padding: 10px;
   font-size: 16px;
 }
-.form-signin .form-control:focus {
+
+.form-search .form-control:focus {
   z-index: 2;
-}
-.form-signin input[type="text"] {
-  margin-bottom: -1px;
-  border-bottom-right-radius: 0;
-  border-bottom-left-radius: 0;
-}
-.form-signin input[type="password"] {
-  margin-bottom: 10px;
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
 }
 
 #app-name {
     text-align: center;
+    color: #58595B;
 }
 #app-name img {
-     width:110px;
-}
-
-/* Wrapper for page content to push down footer */
-#wrap {
-    min-height: 100%;
-    height: auto;
-    height: 100%;
-    /* Negative indent footer by it's height */
-    margin: 0 auto -40px;
-}
-#footer {
-    height: 40px;
-    text-align: center;
-}
-#footer p {
-  padding-top: 10px;
+    width:200px;
+    display: block;
+    margin:auto;
 }
 
 @media screen and (max-width: 680px) {
     #app-name {
         margin: 0;
     }
-    #app-name img {
-        display: block;
-        margin: auto;
-    }
-    body {
-      padding-top: 0;
-      padding-bottom: 0;
+   #app-name img {
+        width:130px;
     }
 }

@@ -13,11 +13,21 @@
           <ul class="nav navbar-nav">
             {% url "btdht_crawler:index" as index_url %}
             {% url "btdht_crawler:recent_index" as recent_url %}
+            {% url "btdht_crawler:stats" as stats_url %}
+            {% url "btdht_crawler:api" as api_url %}
+            {% url "btdht_crawler:about" as about_url %}
             <li{% if request.path == index_url %} class="active"{% endif %}><a href="{{index_url}}">Home</a></li>
             <li{% if recent_url in request.path %} class="active"{% endif %}><a href="{{recent_url}}">Recent torrents</a></li>
+            <li{% if stats_url == request.path %} class="active"{% endif %}><a href="{{stats_url}}"><span class="hidden-sm">Statistics</span><span class="glyphicon glyphicon-stats visible-sm"</span></a></li>
+            <li{% if api_url == request.path %} class="active"{% endif %}><a href="{{api_url}}"><span class="hidden-sm">API</span><span class="glyphicon glyphicon-tasks visible-sm"</span></a></li>
+            <li{% if about_url == request.path %} class="active"{% endif %}><a href="{{about_url}}"><span class="hidden-sm">About</span><span class="glyphicon glyphicon-info-sign visible-sm"</span></a></li>
           </ul>
-        <div class="col-sm-3 col-md-3 pull-right">
-          <form class="navbar-form" role="search" method="post" action="{% url "btdht_crawler:index" %}">
+          {% if request.user.is_authenticated %}
+          <ul class="nav navbar-nav navbar-right">
+            <li><a href="{% url "logout" %}"><span class="glyphicon glyphicon-off"</span></a></li>
+          </ul>
+          {% endif %}
+          <form class="navbar-form navbar-right" role="search" method="post" action="{% url "btdht_crawler:index" %}">
             {% csrf_token %}
             <div class="input-group">
               <input type="text" class="form-control" placeholder="Search" name="query" id="srch-term" value="{% if query %}{{query}}{% elif request.session.query %}{{request.session.query}}{% endif %}" required="">
@@ -26,7 +36,6 @@
               </div>
             </div>
           </form>
-        </div>
         </div><!--/.nav-collapse -->
       </div>
     </nav>

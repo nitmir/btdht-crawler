@@ -15,9 +15,9 @@ from django.contrib.staticfiles.templatetags.staticfiles import static
 
 
 #: URL to the logo showed in the up left corner on the default templates.
-BTDHT_LOGO_URL = static("btdht_crawler/logo.png")
+BTDHT_LOGO_URL = static("btdht_crawler/logo_no_text.svg")
 #: URL to the favicon (shortcut icon) used by the default templates. Default is a key icon.
-BTDHT_FAVICON_URL = static("btdht_crawler/favicon.ico")
+BTDHT_FAVICON_URL = static("btdht_crawler/favicon.png")
 #: Show the powered by footer if set to ``True``
 BTDHT_SHOW_POWERED = True
 #: URLs to css and javascript external components.
@@ -28,6 +28,7 @@ BTDHT_COMPONENT_URLS = {
     "html5shiv": "//oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js",
     "respond": "//oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js",
     "jquery": "//code.jquery.com/jquery.min.js",
+    "chart_js": "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.3.0/Chart.bundle.min.js"
 }
 
 
@@ -36,7 +37,6 @@ BTDHT_MONGODB = "btdht-crawler"
 
 BTDHT_TRACKERS = [
     "udp://tracker.leechers-paradise.org:6969/announce",
-    "udp://IPv6.leechers-paradise.org:6969/announce",
     "udp://tracker.zer0day.to:1337/announce",
     "udp://tracker.coppersurfer.tk:6969/announce",
 
@@ -52,11 +52,23 @@ BTDHT_TRACKERS = [
     "udp://tracker.desu.sh:6969",
 ]
 
-BTDHT_TORRENTS_BASE_PATH = "/home/admin/Programmes/openbay-crawler/transfert/btdht-crawler/torrents_done"
+BTDHT_TRACKERS_NO_SCRAPE = [
+    "udp://9.rarbg.com:2710/announce",
+    "udp://9.rarbg.me:2710/announce",
+    "udp://9.rarbg.to:2710/announce",
+]
+BTDHT_TORRENTS_BASE_PATH = None
 
 BTDHT_PAGE_SIZE = 25
 
 BTDHT_SCRAPE_MIN_INTERVAL = 600
+BTDHT_SCRAPE_BROWSE_INTERVAL = 3600
+
+BTDHT_REQUIRE_AUTH = False
+BTDHT_HIDE_MAGNET_FROM_UNAUTH = False
+BTDHT_HIDE_TORRENT_LINK_FROM_UNAUTH = True
+
+BTDHT_TOKEN_AUTH_BACKEND = None
 
 GLOBALS = globals().copy()
 for name, default_value in GLOBALS.items():
@@ -72,4 +84,3 @@ for name, default_value in GLOBALS.items():
 MERGED_BTDHT_COMPONENT_URLS = BTDHT_COMPONENT_URLS.copy()
 MERGED_BTDHT_COMPONENT_URLS.update(settings.BTDHT_COMPONENT_URLS)
 settings.BTDHT_COMPONENT_URLS = MERGED_BTDHT_COMPONENT_URLS
-

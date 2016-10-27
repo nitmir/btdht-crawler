@@ -7,13 +7,13 @@
    xmlns="http://www.w3.org/2000/svg"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
-   width="103mm"
-   height="79mm"
-   viewBox="621 100 180.98574 150.89"
+   width="100mm"
+   height="65mm"
+   viewBox="621 100 175.71432 124.15"
    id="svg2"
    version="1.1"
    inkscape:version="0.91 r13725"
-   sodipodi:docname="logo.svg">
+   sodipodi:docname="logo_no_text.svg">
   <metadata
      id="metadata87">
     <rdf:RDF>
@@ -37,21 +37,21 @@
      guidetolerance="10"
      inkscape:pageopacity="0"
      inkscape:pageshadow="2"
-     inkscape:window-width="1428"
-     inkscape:window-height="683"
+     inkscape:window-width="1920"
+     inkscape:window-height="983"
      id="namedview83"
      showgrid="false"
      inkscape:zoom="0.66604444"
-     inkscape:cx="220.19551"
+     inkscape:cx="-174.49287"
      inkscape:cy="177.16535"
-     inkscape:window-x="303"
-     inkscape:window-y="327"
-     inkscape:window-maximized="0"
+     inkscape:window-x="0"
+     inkscape:window-y="27"
+     inkscape:window-maximized="1"
      inkscape:current-layer="svg2"
      units="mm" />
   <g
      id="Arrière-plan"
-     transform="matrix(0,-1.0000001,0.99999994,0,515.25036,845.82668)">
+     transform="matrix(0,-1.0000001,0.99999994,0,512.82239,845.79431)">
     <g
        id="g5">
       <ellipse
@@ -270,20 +270,4 @@
        y2="144.09599"
        id="line81" />
   </g>
-  <text
-     xml:space="preserve"
-     style="color:#000000;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:6.46853352px;line-height:125%;font-family:STIXIntegralsUp;-inkscape-font-specification:STIXIntegralsUp;letter-spacing:0px;word-spacing:0px;display:inline;overflow:visible;visibility:visible;fill:#000000;fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker:none;enable-background:accumulate"
-     x="612.54779"
-     y="247.46771"
-     id="text4305"
-     sodipodi:linespacing="125%"><tspan
-       sodipodi:role="line"
-       x="612.54779"
-       y="247.46771"
-       id="tspan4307"
-       style="font-style:normal;font-variant:normal;font-weight:900;font-stretch:normal;font-size:26.95222092px;font-family:Montserrat;-inkscape-font-specification:'Montserrat Heavy';fill:#58595b;fill-opacity:1"><tspan
-         x="612.54779"
-         y="247.46771"
-         style="font-style:normal;font-variant:normal;font-weight:900;font-stretch:normal;font-size:26.95222092px;font-family:Montserrat;-inkscape-font-specification:'Montserrat Heavy';fill:#58595b;fill-opacity:1"
-         id="tspan4309">BTDHT Search</tspan></tspan></text>
 </svg>

@@ -1,18 +1,19 @@
 {% extends "btdht_crawler/base.html" %}
 {% load i18n %}
 {% load btdht_crawler %}
-
+{% block title %}{% if query %}BTDHT | {{query}}{% else %}{% trans "BTDHT Search"  %}{% endif %}{% endblock %}
 {% block pre_content %}
 <div class="row">
               <div class="col-lg-12 col-md-12 col-sm-12 col-xs-12">
                 <h1 id="app-name">
                     {% if settings.BTDHT_LOGO_URL %}<img src="{{settings.BTDHT_LOGO_URL}}" alt="btdht-logo" />{% endif %}
-                    {% trans "BTDHT Torrent Search" %}</h1>
+                    {% trans "BTDHT Search" %}
+                </h1>
               </div>
             </div>
 {% endblock %}
 {% block content %}
-<form class="form-signin" method="post" id="search_form">
+<form class="form-search" method="post" id="search_form">
 {% csrf_token %}
 {% include "btdht_crawler/form.html" %}
 <button class="btn btn-primary btn-block btn-lg" type="submit">{% trans "Search" %}</button>
@@ -21,7 +22,7 @@
 
 
 {% block content2 %}
-{% if torrents %}<h1>Search results</h1>{% endif %}
+{% if torrents %}<h1 id="results">Search results</h1>{% endif %}
 {% include "btdht_crawler/torrent_table.html" %}
 {% endblock %}
 
@@ -29,5 +30,6 @@
 $(document).ready(function () {
     $(".pagination").rPage();
 });
+window.location.replace("#");
 {% endblock %}
 
