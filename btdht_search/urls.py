@@ -16,7 +16,7 @@ from .utils import require_login, token_auth
 
 import views
 
-app_name = "btdht_crawler"
+app_name = "btdht_search"
 
 urlpatterns = [
     url('^$', require_login(views.index), name='index'),

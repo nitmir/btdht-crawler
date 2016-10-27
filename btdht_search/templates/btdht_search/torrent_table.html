@@ -72,12 +72,12 @@
     </a>
     {% endif %}
     {% if not settings.BTDHT_HIDE_TORRENT_LINK_FROM_UNAUTH or request.user.is_authenticated %}
-    <a title="download the torrent file" href="{% url "btdht_crawler:download_torrent" t.hex_hash t.name %}">
+    <a title="download the torrent file" href="{% url "btdht_search:download_torrent" t.hex_hash t.name %}">
       <span class="glyphicon glyphicon-download-alt" aria-hidden="true"></span>
     </a>
     {% endif %}
   </td>
-  <td><a href="{% url "btdht_crawler:info_torrent" t.hex_hash t.name %}">{{t.name}}</a></td>
+  <td><a href="{% url "btdht_search:info_torrent" t.hex_hash t.name %}">{{t.name}}</a></td>
   <td class="text-nowrap">{{t.size_pp}}</td>
   <td class="text-nowrap">{{t.created_pp}}</td>
   <td class="text-nowrap">{{t.file_nb}}</td>

@@ -1,6 +1,6 @@
-{% extends "btdht_crawler/base.html" %}
+{% extends "btdht_search/base.html" %}
 {% load i18n %}
-{% load btdht_crawler %}
+{% load btdht_search %}
 {% block title %}{% if query %}BTDHT | {{query}}{% else %}{% trans "BTDHT Search"  %}{% endif %}{% endblock %}
 {% block pre_content %}
 <div class="row">
@@ -15,7 +15,7 @@
 {% block content %}
 <form class="form-search" method="post" id="search_form">
 {% csrf_token %}
-{% include "btdht_crawler/form.html" %}
+{% include "btdht_search/form.html" %}
 <button class="btn btn-primary btn-block btn-lg" type="submit">{% trans "Search" %}</button>
 </form>
 {% endblock %}
@@ -23,7 +23,7 @@
 
 {% block content2 %}
 {% if torrents %}<h1 id="results">Search results</h1>{% endif %}
-{% include "btdht_crawler/torrent_table.html" %}
+{% include "btdht_search/torrent_table.html" %}
 {% endblock %}
 
 {% block javascript_inline %}

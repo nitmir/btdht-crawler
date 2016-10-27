@@ -230,8 +230,8 @@ class Torrent(object):
             )
         return TorrentsList(
             results,
-            url=lambda page:reverse("btdht_crawler:index_query", kwargs=dict(page=page, query=query, order_by=order_by, asc=1 if asc else 0)) + '#results',
-            order_url=lambda order_by, asc:reverse("btdht_crawler:index_query", kwargs=dict(page=page, query=query, order_by=order_by, asc=asc)) + '#results',
+            url=lambda page:reverse("btdht_search:index_query", kwargs=dict(page=page, query=query, order_by=order_by, asc=1 if asc else 0)) + '#results',
+            order_url=lambda order_by, asc:reverse("btdht_search:index_query", kwargs=dict(page=page, query=query, order_by=order_by, asc=asc)) + '#results',
             page=page,
             order_by=order_by,
             asc=asc
@@ -248,7 +248,7 @@ class Torrent(object):
         )
         return TorrentsList(
             results,
-            url=lambda page:reverse("btdht_crawler:recent", args=[page]) + '#recent', page=page, max_results=max_results
+            url=lambda page:reverse("btdht_search:recent", args=[page]) + '#recent', page=page, max_results=max_results
         )
 
     def __init__(self, hash=None, obj=None, no_files=False):
@@ -308,7 +308,7 @@ class Torrent(object):
     @property
     def url(self):
         if os.path.isfile(self.path):
-            return reverse("btdht_crawler:download_torrent", args=[self.hex_hash, self.name])
+            return reverse("btdht_search:download_torrent", args=[self.hex_hash, self.name])
         else:
             return None
 

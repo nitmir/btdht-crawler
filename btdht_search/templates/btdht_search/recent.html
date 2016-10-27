@@ -1,6 +1,6 @@
-{% extends "btdht_crawler/base.html" %}
+{% extends "btdht_search/base.html" %}
 {% load i18n %}
-{% load btdht_crawler %}
+{% load btdht_search %}
 
 {% block title %}{% trans "BTDHT | recent torrents"  %}{% endblock %}
 
@@ -18,7 +18,7 @@
 
 {% block content2 %}
 <h1 id="recent">Recent torrents</h1>
-{% include "btdht_crawler/torrent_table.html" %}
+{% include "btdht_search/torrent_table.html" %}
 {% endblock %}
 
 {% block javascript_inline %}

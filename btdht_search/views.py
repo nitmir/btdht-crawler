@@ -19,19 +19,19 @@ def index(request, page=1, query=None, order_by=const.ORDER_BY_SCORE, asc='1'):
     torrents = None
     page = int(page)
     if page < 1:
-        return redirect("btdht_crawler:index_query", page=1, query=query, order_by=order_by, asc=asc)
+        return redirect("btdht_search:index_query", page=1, query=query, order_by=order_by, asc=asc)
     request.session["query"] = query
     if request.method == "GET":
         form = SearchForm(initial={'query': query})
     elif request.method == "POST":
         form = SearchForm(request.POST, initial={'query': query})
         if form.is_valid():
-            return redirect("btdht_crawler:index_query", page=1, query=form.cleaned_data["query"], order_by=const.ORDER_BY_SCORE, asc='1')
+            return redirect("btdht_search:index_query", page=1, query=form.cleaned_data["query"], order_by=const.ORDER_BY_SCORE, asc='1')
     if query is not None:
         torrents = Torrent.search(query, page=page, order_by=order_by, asc=(asc == '1'))
         if page > torrents.last_page:
-            return redirect("btdht_crawler:index_query", page=torrents.last_page, query=query, order_by=order_by, asc=asc)
-    return render(request, "btdht_crawler/index.html", context({'form': form, 'torrents': torrents, 'query': query}))
+            return redirect("btdht_search:index_query", page=torrents.last_page, query=query, order_by=order_by, asc=asc)
+    return render(request, "btdht_search/index.html", context({'form': form, 'torrents': torrents, 'query': query}))
 
 
 def api_search(request, page=1, query=None):
@@ -88,10 +88,10 @@ def info_torrent(request, hex_hash, name):
     if request.method == "POST":
         if 'scrape' in request.POST:
             torrent.scrape()
-            return redirect("btdht_crawler:info_torrent", hex_hash, name)
+            return redirect("btdht_search:info_torrent", hex_hash, name)
     if torrent.last_scrape == 0:
         torrent.scrape()
-    return render(request, "btdht_crawler/torrent.html", context({'torrent': torrent}))
+    return render(request, "btdht_search/torrent.html", context({'torrent': torrent}))
 
 def api_info_torrent(request, hex_hash):
     try:
@@ -104,14 +104,14 @@ def api_info_torrent(request, hex_hash):
 def recent(request, page=1):
     page = int(page)
     if page < 1:
-        return redirect("btdht_crawler:recent", 1)
+        return redirect("btdht_search:recent", 1)
     torrents = Torrent.recent(page, 124999)
     if page > torrents.last_page:
-        return redirect("btdht_crawler:recent", torrents.last_page)
+        return redirect("btdht_search:recent", torrents.last_page)
     request.session["query"] = None
     return render(
         request,
-        "btdht_crawler/recent.html",
+        "btdht_search/recent.html",
         context({
             'torrents': torrents,
         })
@@ -141,7 +141,7 @@ def stats(request):
         hash_tracked.append(result["hash_tracked"])
     return render(
         request,
-        "btdht_crawler/stats.html",
+        "btdht_search/stats.html",
         context({
             'hash_tracked': json.dumps(hash_tracked),
             'torrent_indexed': json.dumps(torrent_indexed),
@@ -157,7 +157,7 @@ def api(request):
         user_pref = UserPref.objects.get_or_create(user=request.user)[0]
     else:
         user_pref = None
-    return render(request, "btdht_crawler/api.html", context({'user_pref': user_pref}))
+    return render(request, "btdht_search/api.html", context({'user_pref': user_pref}))
 
 def about(request):
-    return render(request, "btdht_crawler/about.html", context({}))
+    return render(request, "btdht_search/about.html", context({}))

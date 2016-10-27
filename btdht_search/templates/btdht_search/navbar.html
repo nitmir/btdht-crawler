@@ -7,15 +7,15 @@
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="navbar-brand" href="{% url "btdht_crawler:index" %}">BTDHT</a>
+          <a class="navbar-brand" href="{% url "btdht_search:index" %}">BTDHT</a>
         </div>
         <div id="navbar" class="navbar-collapse collapse">
           <ul class="nav navbar-nav">
-            {% url "btdht_crawler:index" as index_url %}
-            {% url "btdht_crawler:recent_index" as recent_url %}
-            {% url "btdht_crawler:stats" as stats_url %}
-            {% url "btdht_crawler:api" as api_url %}
-            {% url "btdht_crawler:about" as about_url %}
+            {% url "btdht_search:index" as index_url %}
+            {% url "btdht_search:recent_index" as recent_url %}
+            {% url "btdht_search:stats" as stats_url %}
+            {% url "btdht_search:api" as api_url %}
+            {% url "btdht_search:about" as about_url %}
             <li{% if request.path == index_url %} class="active"{% endif %}><a href="{{index_url}}">Home</a></li>
             <li{% if recent_url in request.path %} class="active"{% endif %}><a href="{{recent_url}}">Recent torrents</a></li>
             <li{% if stats_url == request.path %} class="active"{% endif %}><a href="{{stats_url}}"><span class="hidden-sm">Statistics</span><span class="glyphicon glyphicon-stats visible-sm"</span></a></li>
@@ -27,7 +27,7 @@
             <li><a href="{% url "logout" %}"><span class="glyphicon glyphicon-off"</span></a></li>
           </ul>
           {% endif %}
-          <form class="navbar-form navbar-right" role="search" method="post" action="{% url "btdht_crawler:index" %}">
+          <form class="navbar-form navbar-right" role="search" method="post" action="{% url "btdht_search:index" %}">
             {% csrf_token %}
             <div class="input-group">
               <input type="text" class="form-control" placeholder="Search" name="query" id="srch-term" value="{% if query %}{{query}}{% elif request.session.query %}{{request.session.query}}{% endif %}" required="">

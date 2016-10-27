@@ -4,4 +4,4 @@ from django.apps import AppConfig
 
 
 class BtdhtCrawlerConfig(AppConfig):
-    name = 'btdht_crawler'
+    name = 'btdht_search'

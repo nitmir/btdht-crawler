@@ -15,9 +15,9 @@ from django.contrib.staticfiles.templatetags.staticfiles import static
 
 
 #: URL to the logo showed in the up left corner on the default templates.
-BTDHT_LOGO_URL = static("btdht_crawler/logo_no_text.svg")
+BTDHT_LOGO_URL = static("btdht_search/logo_no_text.svg")
 #: URL to the favicon (shortcut icon) used by the default templates. Default is a key icon.
-BTDHT_FAVICON_URL = static("btdht_crawler/favicon.png")
+BTDHT_FAVICON_URL = static("btdht_search/favicon.png")
 #: Show the powered by footer if set to ``True``
 BTDHT_SHOW_POWERED = True
 #: URLs to css and javascript external components.

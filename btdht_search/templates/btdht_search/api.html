@@ -1,6 +1,6 @@
-{% extends "btdht_crawler/base.html" %}
+{% extends "btdht_search/base.html" %}
 {% load i18n %}
-{% load btdht_crawler %}
+{% load btdht_search %}
 
 {% block title %}BTDHT | API{% endblock %}
 
@@ -14,10 +14,10 @@
 <ul>
   <li>
     For fetcthing search results :
-    {% url "btdht_crawler:api_search" "AZERTYUIOP" 123456789 as search_url %}
+    {% url "btdht_search:api_search" "AZERTYUIOP" 123456789 as search_url %}
     <pre>{{search_url|replace:"AZERTYUIOP:<query>"|replace:"123456789:<page_nb>"|absolute_url:request}}</pre>
     For instance:
-{% url "btdht_crawler:api_search" "debian" 1 as search_url %}
+{% url "btdht_search:api_search" "debian" 1 as search_url %}
 <pre>
 $ curl {{search_url|absolute_url:request}}
 [
@@ -51,10 +51,10 @@ $ curl {{search_url|absolute_url:request}}
   </li>
   <li>
   For reading a specific torrent info:
-  {% url "btdht_crawler:api_info_torrent" "EFF64C9D27332054112405897710C51BB3DBB6DD" as torrent_url%}
+  {% url "btdht_search:api_info_torrent" "EFF64C9D27332054112405897710C51BB3DBB6DD" as torrent_url%}
   <pre>{{torrent_url|replace:"EFF64C9D27332054112405897710C51BB3DBB6DD:<torrent hex hash>"|absolute_url:request}}</pre>
   For instance :
-  {% url "btdht_crawler:api_info_torrent" "7661229811ef32014879ceedcdf4a48f256c88ba" as torrent_url%}
+  {% url "btdht_search:api_info_torrent" "7661229811ef32014879ceedcdf4a48f256c88ba" as torrent_url%}
 <pre>
 $ curl {{torrent_url|absolute_url:request}}
 {
@@ -72,10 +72,10 @@ $ curl {{torrent_url|absolute_url:request}}
   </li>
   <li>
   Fetching recent torrents:
-  {% url "btdht_crawler:api_recent" 123456789 as recent_url %}
+  {% url "btdht_search:api_recent" 123456789 as recent_url %}
   <pre>{{recent_url|replace:"123456789:<page_nb>"|absolute_url:request}}</pre>
   For instance:
-{% url "btdht_crawler:api_recent" 1 as recent_url %}
+{% url "btdht_search:api_recent" 1 as recent_url %}
 <pre>
 $ curl {{recent_url|absolute_url:request}}
 curl http://127.0.0.1:8000/recent/1.json
