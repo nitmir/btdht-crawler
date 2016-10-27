@@ -2,5 +2,4 @@ btdht
 pymongo
 psutil
 chardet
-
-Django
+progressbar
