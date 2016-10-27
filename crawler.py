@@ -76,7 +76,6 @@ class Crawler(DHT):
         self.register_message("announce_peer")
 
     def stop(self):
-        self.update_hash(None, None)
         if self.master:
             self.root.client.stoped = True
         super(Crawler, self).stop()
@@ -87,11 +86,8 @@ class Crawler(DHT):
         if self.master:
             self.root.db = pymongo.MongoClient()[config.mongo["db"]]["torrents"]
             self.root.hash_to_ignore = HashToIgnore(self.root.db)
-            self.root.update_hash = set()
-            self.root.update_hash_lock = Lock()
             self.root.bad_info_hash = {}
             self.root.good_info_hash = {}
-            self.root.last_update_hash = 0
         self.hash_to_fetch = collections.OrderedDict()
         self.hash_to_fetch_tried = collections.defaultdict(set)
         self.hash_to_fetch_totry = collections.defaultdict(set)
@@ -169,11 +165,7 @@ class Crawler(DHT):
                 self.sleep(10)
                 
     def clean(self):
-        if self.master:
-            now = time.time()
-            if now - self.root.last_update_hash > 60:
-                self.update_hash(None, None)
-                self.root.last_update_hash = now
+        pass
 
     def clean_long(self):
         if self.master:
@@ -193,8 +185,6 @@ class Crawler(DHT):
                 except KeyError:
                     pass
 
-            # Actualising hash to ignore
-            #self.root.hash_to_ignore = self.get_hash_to_ignore()
             self.save(max_node=4000)
 
 
@@ -207,7 +197,6 @@ class Crawler(DHT):
                     #self.root.good_info_hash[info_hash]=time.time()
                     try: del self.root.bad_info_hash[info_hash]
                     except KeyError: pass
-                self.update_hash(info_hash, get=False)
                 if info_hash in self.hash_to_fetch:
                     for ipport in response.get("values", []):
                         (ip, port) = struct.unpack("!4sH", ipport)
@@ -218,9 +207,7 @@ class Crawler(DHT):
     def on_get_peers_query(self, query):
         info_hash = query.get("info_hash")
         if info_hash:
-            if info_hash in self.root.good_info_hash and not info_hash in self.root.hash_to_ignore:
-                self.update_hash(info_hash, get=True)
-            elif not info_hash in self.root.bad_info_hash and not info_hash in self.root.good_info_hash and not info_hash in self.root.hash_to_ignore and not info_hash in self.hash_to_fetch:
+            if not info_hash in self.root.bad_info_hash and not info_hash in self.root.good_info_hash and not info_hash in self.root.hash_to_ignore and not info_hash in self.hash_to_fetch:
                 self.determine_info_hash(info_hash)
 
     def on_announce_peer_query(self, query):
@@ -231,7 +218,6 @@ class Crawler(DHT):
             self.root.good_info_hash[info_hash]=time.time()
             try: del self.root.bad_info_hash[info_hash]
             except KeyError: pass
-            self.update_hash(info_hash, get=False)
 
     def get_hash_to_ignore(self, errornb=0):
         try:
@@ -246,31 +232,6 @@ class Crawler(DHT):
             time.sleep(0.1)
             return self.get_hash_to_ignore(errornb=1+errornb)
         
-
-    def update_hash(self, info_hash, get, errornb=0):
-        if info_hash is not None and info_hash in self.root.hash_to_ignore:
-            return
-        with self.root.update_hash_lock:
-            # Try update a hash at most once every 5 minutes
-            if info_hash is not None:
-                self.root.update_hash.add((info_hash, get))
-                return
-            else:
-                hashs_get = [h for h,g in self.root.update_hash if g]
-                hashs_announce = [h for h,g in self.root.update_hash if not g]
-                self.root.update_hash = set()
-        try:
-            for h in hashs_get:
-                self.root.db.update({'_id': Binary(h)}, {"$set": {'dht_last_get': int(time.time())}}, upsert=True)
-            for h in hashs_announce:
-                self.root.db.update(
-                    {'_id': Binary(h)},
-                    {"$set": {'dht_last_announce': int(time.time())}},
-                    upsert=True
-                )
-        except pymongo.errors.AutoReconnect as e:
-            self.debug(0, "MONGOERROR: %r, %s" % (e, errornb))
-
     def determine_info_hash(self, hash):
         def callback(peers):
             if peers:
