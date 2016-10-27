@@ -1,10 +1,9 @@
 *.pyc
-torrents/*
-torrents_archives/*
-torrents_done/*
+torrents/
+torrents_archives/
+torrents_done/
+torrents_scrape/
 config.py
 *.id
 *.pid
-*.c
-*.cpp
 *.status

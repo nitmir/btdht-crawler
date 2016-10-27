@@ -47,32 +47,5 @@ compact_archived_torrents = True
 # juste by coping them in that ddirectory
 torrents_new = "torrents_new/"
 
-# Your public ipv4 address
-public_ip = "1.2.3.4"
-
-# some ports for the replicatiob system
-# beetween user running feed.py
-# the first founding a torrent in the dht will inform
-# the other with is torcache link
-replication_udp_port = 5004
-replication_tcp_port = 5004
-# udp port
-replication_dht_port = 5005
-# please put here at least two tcp ports
-# leave empty to choose randomly avaible port on
-# the system
-bootstrap_port = []
-
-# Scrape intervale
-scrape_interval = 60 # in minute, set 0 to disable scraping
-
-# Max number of torrent to scrape by pass
-# set a number high enough to be able de scrape every torrents in a
-# scrape_interval. a pass take 5min so scrape_interval should be
-# something like num_torrents / (scrape_interval / 5)
-# Set to None to scrape all torrents that need to be scraped
-scape_limit = 250000 # set to None to disable
-
-# if True generate a description from the torrent files list
-# if False, set it to NULL
-generate_description = True
+# directory use to store tracker full scrape files
+torrents_scrape = "torrents_scrape/"
