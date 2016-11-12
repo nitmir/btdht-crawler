@@ -50,9 +50,9 @@
           {% endif %}
           <form class="navbar-form navbar-right" role="search" method="post" action="{% url "btdht_search:index" %}">
             {% csrf_token %}
-            <div class="input-group">
+            <div class="input-group" id="navbar-search-input-group">
               <input type="text" class="form-control" placeholder="Search" name="query" id="srch-term" value="{% if query %}{{query}}{% elif request.session.query %}{{request.session.query}}{% endif %}" required="">
-              <div class="input-group-btn">
+              <div class="input-group-btn" id="navbar-search-input-group-btn">
               <select id="nav-search-select" class="form-control select-noarrow" name="category">
               {% for value in const.categories_choices %}
               <option value="{{value.0}}" {% if category == value.0 or request.session.category == value.0 %}selected{% endif %} >{{value.1}}</option>

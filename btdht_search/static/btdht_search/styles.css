@@ -93,6 +93,13 @@ select.select-noarrow::-ms-expand {
         min-width: 280px;
         white-space: normal !important;
     }
+
+    #navbar-search-input-group-btn {
+        width: 115px;
+    }
+    #navbar-search-input-group {
+        width: 100%;
+    }
 }
 
 @-moz-document url-prefix() {
