@@ -100,6 +100,12 @@ select.select-noarrow::-ms-expand {
     #navbar-search-input-group {
         width: 100%;
     }
+    #files_table tbody tr td.full-width {
+        min-width: 330px;
+    }
+    #files_table_filter {
+        float: right;
+    }
 }
 
 @-moz-document url-prefix() {

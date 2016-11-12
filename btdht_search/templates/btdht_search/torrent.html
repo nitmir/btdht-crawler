@@ -24,6 +24,7 @@ $(document).ready(function(){
     search_input.css('width', 'auto');
     search_input.css('display', 'inline');
     $('#files_table_info').hide();
+    $('#files_table').wrap('<div class="table-responsive" style="border:none"></div>');
 });
 {% endblock %}
 
@@ -54,6 +55,7 @@ $(document).ready(function(){
 </table>
 {% if not settings.BTDHT_HIDE_MAGNET_FROM_UNAUTH or not settings.BTDHT_HIDE_TORRENT_LINK_FROM_UNAUTH or request.user.is_authenticated %}
 <h2>Download Links</h2>
+<div class="container">
 <div class="row">
   <div class="col-lg-3 col-md-3 col-sm-2 col-xs-0"></div>
   <div class="col-lg-6 col-md-6 col-sm-8 col-xs-12">
@@ -78,6 +80,7 @@ $(document).ready(function(){
   </div>
   <div class="col-lg-3 col-md-3 col-sm-2 col-xs-0"></div>
 </div>
+</div>
 {% endif %}
 {% if torrent.files %}
 <h2 id="torrent_files">Torrent Files</h2>
@@ -85,7 +88,7 @@ $(document).ready(function(){
 <thead><tr><th>Path</th><th>Size</th></tr></thead>
 <tbody>
 {% for file in torrent.files %}
-<tr><td>{{file.path}}</td><td class="text-nowrap">{{file.size|size_pp}}</td></tr>
+<tr><td class="full-width">{{file.path}}</td><td class="text-nowrap">{{file.size|size_pp}}</td></tr>
 {% endfor %}
 </tbody>
 </table>
