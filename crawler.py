@@ -219,7 +219,10 @@ class Crawler(DHT):
                 except KeyError:
                     pass
 
-            self.save(max_node=4000)
+            self.save(
+                os.path.join(config.data_dir, "dht_%s.status" % self.myid.value.encode("hex")),
+                max_node=4000
+            )
 
     def on_get_peers_response(self, query, response):
         if response.get("values"):
@@ -353,7 +356,10 @@ def lauch(debug, id_file="crawler1.id", lprefix="", worker_alive=None):
             liv.start()
             time.sleep(1.4142135623730951 * 0.3)
         print "%sloading routing table" % lprefix
-        dht_base.load(max_node=4000)
+        dht_base.load(
+            os.path.join(config.data_dir, "dht_%s.status" % dht_base.myid.value.encode("hex")),
+            max_node=4000
+        )
         print "%srouting table loaded" % lprefix
         while True:
             for liv in liveness:
@@ -371,7 +377,10 @@ def lauch(debug, id_file="crawler1.id", lprefix="", worker_alive=None):
     except (KeyboardInterrupt, Exception) as e:
         print("%r" % e)
         stop(liveness)
-        dht_base.save(max_node=4000)
+        dht_base.save(
+            os.path.join(config.data_dir, "dht_%s.status" % dht_base.myid.value.encode("hex")),
+            max_node=4000
+        )
         print("exit")
 
 
@@ -398,7 +407,7 @@ def worker(debug):
         for i in range(1, config.crawler_worker + 1):
             jobs[i] = multiprocessing.Process(
                 target=lauch,
-                args=(debug, "crawler%s.id" % i, "W%s:" % i, worker_alive)
+                args=(debug, os.path.join(config.data_dir, "crawler%s.id" % i), "W%s:" % i, worker_alive)
             )
             jobs[i].daemon = True
             jobs[i].start()
@@ -439,7 +448,7 @@ def worker(debug):
                     print("crawler%s died, respawning" % i)
                     jobs[i] = multiprocessing.Process(
                         target=lauch,
-                        args=(debug, "crawler%s.id" % i, "W%s:" % i)
+                        args=(debug, os.path.join(config.data_dir, "crawler%s.id" % i), "W%s:" % i)
                     )
                     jobs[i].start()
                     try:
@@ -465,14 +474,11 @@ if __name__ == '__main__':
     debug = config.debug
     for dir in [
         config.torrents_dir, config.torrents_done, config.torrents_archive,
-        config.torrents_new, config.torrents_error
+        config.torrents_new, config.torrents_error, config.data_dir
     ]:
         if not os.path.isdir(dir):
             os.mkdir(dir)
     for file in os.listdir(config.torrents_dir):
         if file.endswith('.new'):
             os.remove(os.path.join(config.torrents_dir, file))
-    if config.crawler_worker > 1:
-        worker(debug)
-    else:
-        lauch(debug)
+    worker(debug)

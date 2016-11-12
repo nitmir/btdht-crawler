@@ -27,6 +27,8 @@ crawler_instance = 3  # 8 instances
 # max resident memory in byte
 crawler_max_memory = 8 * 1024 * 1024 * 1024  # 8GB
 
+data_dir = "data/"
+
 # where to write torrents retreived from dht or torcache
 torrents_dir = "torrents/"
 # where to move processed torrents
