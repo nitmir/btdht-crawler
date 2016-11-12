@@ -7,7 +7,10 @@
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="navbar-brand" href="{% url "btdht_search:index" %}">BTDHT</a>
+          <a class="navbar-brand" href="{% url "btdht_search:index" %}">
+              {% if settings.BTDHT_LOGO_URL %}<span><img src="{{settings.BTDHT_LOGO_URL}}" alt="btdht-logo"/></span>{% endif %}
+              BTDHT Search
+          </a>
         </div>
         <div id="navbar" class="navbar-collapse collapse">
           <ul class="nav navbar-nav">
@@ -16,11 +19,29 @@
             {% url "btdht_search:stats" as stats_url %}
             {% url "btdht_search:api" as api_url %}
             {% url "btdht_search:about" as about_url %}
-            <li{% if request.path == index_url %} class="active"{% endif %}><a href="{{index_url}}">Home</a></li>
-            <li{% if recent_url in request.path %} class="active"{% endif %}><a href="{{recent_url}}">Recent torrents</a></li>
-            <li{% if stats_url == request.path %} class="active"{% endif %}><a href="{{stats_url}}"><span class="hidden-sm">Statistics</span><span class="glyphicon glyphicon-stats visible-sm"</span></a></li>
-            <li{% if api_url == request.path %} class="active"{% endif %}><a href="{{api_url}}"><span class="hidden-sm">API</span><span class="glyphicon glyphicon-tasks visible-sm"</span></a></li>
-            <li{% if about_url == request.path %} class="active"{% endif %}><a href="{{about_url}}"><span class="hidden-sm">About</span><span class="glyphicon glyphicon-info-sign visible-sm"</span></a></li>
+            <li{% if request.path == index_url %} class="active"{% endif %}>
+              <a href="{{index_url}}" title="Home"><span class="hidden-sm">Home</span><span class="glyphicon glyphicon-home visible-sm"></span></a>
+            </li>
+            <li{% if recent_url in request.path %} class="active"{% endif %}>
+              <a href="{{recent_url}}" title="Recent torrents"><span class="hidden-sm">Recent torrents</span><span class="glyphicon glyphicon-plus visible-sm"></span></a>
+            </li>
+            <li class="dropdown" id="favorites_navbar" style="display: none">
+              <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false" title="Favorites">
+                <span class="hidden-sm">Favorites <span class="caret"></span></span>
+                <span class="glyphicon glyphicon-star visible-sm"></span>
+              </a>
+              <ul class="dropdown-menu" id="favorites_dropdown">
+              </ul>
+            </li>
+            <li{% if stats_url == request.path %} class="active"{% endif %}>
+              <a href="{{stats_url}}" title="Statistics"><span class="hidden-sm">Statistics</span><span class="glyphicon glyphicon-stats visible-sm"></span></a>
+            </li>
+            <li{% if api_url == request.path %} class="active"{% endif %}>
+              <a href="{{api_url}}" title="API"><span class="hidden-sm">API</span><span class="glyphicon glyphicon-tasks visible-sm"></span></a>
+            </li>
+            <li{% if about_url == request.path %} class="active"{% endif %}>
+              <a href="{{about_url}}" title="About"><span class="hidden-sm">About</span><span class="glyphicon glyphicon-info-sign visible-sm"></span></a>
+            </li>
           </ul>
           {% if request.user.is_authenticated %}
           <ul class="nav navbar-nav navbar-right">
@@ -32,6 +53,11 @@
             <div class="input-group">
               <input type="text" class="form-control" placeholder="Search" name="query" id="srch-term" value="{% if query %}{{query}}{% elif request.session.query %}{{request.session.query}}{% endif %}" required="">
               <div class="input-group-btn">
+              <select id="nav-search-select" class="form-control select-noarrow" name="category">
+              {% for value in const.categories_choices %}
+              <option value="{{value.0}}" {% if category == value.0 or request.session.category == value.0 %}selected{% endif %} >{{value.1}}</option>
+              {% endfor %}
+              </select>
                 <button class="btn btn-default" type="submit"><i class="glyphicon glyphicon-search"></i></button>
               </div>
             </div>

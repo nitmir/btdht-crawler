@@ -9,11 +9,10 @@
 #
 # (c) 2015-2016 Valentin Samir
 """forms for the app"""
-from .settings import settings
-
 from django import forms
 from django.forms import widgets
-from django.utils.translation import ugettext_lazy as _
+
+import const
 
 
 class BootsrapForm(forms.Form):
@@ -28,7 +27,10 @@ class BootsrapForm(forms.Form):
             # Only tweak the field if it will be displayed
             if not isinstance(field.widget, widgets.HiddenInput):
                 attrs = {}
-                if isinstance(field.widget, (widgets.Input, widgets.Select, widgets.Textarea)):
+                if (
+                    isinstance(field.widget, (widgets.Input, widgets.Select, widgets.Textarea)) and
+                    not isinstance(field.widget, (forms.RadioSelect,))
+                ):
                     attrs['class'] = "form-control"
                 if isinstance(field.widget, (widgets.Input, widgets.Textarea)) and field.label:
                     attrs["placeholder"] = field.label
@@ -41,7 +43,11 @@ class SearchForm(BootsrapForm):
     query = forms.CharField(
         label="",
         widget=forms.TextInput(attrs={
-            'autofocus': 'autofocus',
             'placeholder': 'Search here',
         })
+    )
+    category = forms.ChoiceField(
+        label="",
+        choices=const.categories_choices,
+        widget=forms.RadioSelect(),
     )

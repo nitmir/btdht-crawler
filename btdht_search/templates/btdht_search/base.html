@@ -5,6 +5,7 @@
         <!--[if IE]><meta http-equiv="X-UA-Compatible" content="IE=edge" /><![endif]-->
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>{% block title %}{% trans "BTDHT Search"  %}{% endblock %}</title>
+        {% block extra_pre_head %}{% endblock %}
         <link href="{{settings.BTDHT_COMPONENT_URLS.bootstrap3_css}}" rel="stylesheet">
         <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
         <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
@@ -13,8 +14,8 @@
         <script src="{{settings.BTDHT_COMPONENT_URLS.respond}}"></script>
         <![endif]-->
         {% if settings.BTDHT_FAVICON_URL %}<link rel="shortcut icon" href="{{settings.BTDHT_FAVICON_URL}}" />{% endif %}
-        <link href="{% static "btdht_search/styles.css" %}" rel="stylesheet">
         {% block extra_head %}{% endblock %}
+        <link href="{% static "btdht_search/styles.css" %}" rel="stylesheet">
     </head>
     <body>
     {% include "btdht_search/navbar.html" %}
@@ -36,10 +37,20 @@
        </div>
      <div style="clear: both;"></div>
       <script src="{{settings.BTDHT_COMPONENT_URLS.jquery}}"></script>
+      <script src="{{settings.BTDHT_COMPONENT_URLS.jquery_cookie}}"></script>
       <script src="{{settings.BTDHT_COMPONENT_URLS.bootstrap3_js}}"></script>
       <script src="{% static "btdht_search/responsive-paginate.js" %}"></script>
+      <script src="{% static "btdht_search/favorites.js" %}"></script>
       {% block javascript %}{% endblock %}
       <script type="text/javascript">
+populate_favorite_navbar();
+if($.cookie('timezone') == null){
+    $.getScript("{{settings.BTDHT_COMPONENT_URLS.jstz}}", function(){
+        var timezone = jstz.determine();
+        $.cookie('timezone', timezone.name(), { expires: 365 * 100, path: '/' });
+        location.reload();
+    });
+}
 {% block javascript_inline %}{% endblock %}
 </script>
     </body>

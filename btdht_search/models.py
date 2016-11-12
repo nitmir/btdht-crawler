@@ -11,7 +11,7 @@ import re
 from datetime import timedelta
 from bson.binary import Binary
 
-from .utils import getdb, format_size, format_date, scrape, random_token, absolute_url
+from .utils import getdb, format_size, format_date, scrape, random_token
 import const
 
 
@@ -28,13 +28,17 @@ class TorrentsList(object):
     order_url = None
     asc = True
 
-    def __init__(self, cursor, url, page=1, max_results=None, order_by=None, asc=True, order_url=None):
+    def __init__(
+        self, cursor, url, page=1, max_results=None, order_by=None,
+        asc=True, order_url=None, timezone='UTC'
+    ):
+        self._timezone = timezone
         self.order_url = order_url
         if order_by:
             self.order_by = order_by
             self.asc = asc
             if order_by == const.ORDER_BY_SCORE:
-                cursor = cursor.sort([("score", {"$meta": "textScore" })])
+                cursor = cursor.sort([("score", {"$meta": "textScore"})])
             elif order_by == const.ORDER_BY_NAME:
                 cursor = cursor.sort([("name", 1 if asc else -1)])
             elif order_by == const.ORDER_BY_SIZE:
@@ -44,9 +48,9 @@ class TorrentsList(object):
             elif order_by == const.ORDER_BY_FILES:
                 cursor = cursor.sort([("file_nb", 1 if asc else -1)])
             elif order_by == const.ORDER_BY_PEERS:
-                 cursor = cursor.sort([("peers", 1 if asc else -1)])
+                cursor = cursor.sort([("peers", 1 if asc else -1)])
             elif order_by == const.ORDER_BY_SEEDS:
-                 cursor = cursor.sort([("seeds", 1 if asc else -1)])
+                cursor = cursor.sort([("seeds", 1 if asc else -1)])
             else:
                 self.order_by = None
         skip = settings.BTDHT_PAGE_SIZE * (page - 1)
@@ -104,18 +108,22 @@ class TorrentsList(object):
             to_scrape = []
             for result in self._cursor:
                 torrents.append(result)
-                if not 'last_scrape' in result or result['last_scrape'] == 0 or (time.time() - result['last_scrape']) > settings.BTDHT_SCRAPE_BROWSE_INTERVAL:
+                if (
+                    'last_scrape' not in result or
+                    result['last_scrape'] == 0 or
+                    (time.time() - result['last_scrape']) > settings.BTDHT_SCRAPE_BROWSE_INTERVAL
+                ):
                     to_scrape.append(str(result['_id']))
             if to_scrape:
                 scrape_result = scrape(to_scrape)
                 for result in torrents:
                     result.update(scrape_result.get(str(result['_id']), {}))
-                    torrent = Torrent(obj=result, no_files=True)
+                    torrent = Torrent(obj=result, no_files=True, timezone=self._timezone)
                     self.torrents.append(torrent)
                     yield torrent
             else:
                 for result in torrents:
-                    torrent = Torrent(obj=result, no_files=True)
+                    torrent = Torrent(obj=result, no_files=True, timezone=self._timezone)
                     self.torrents.append(torrent)
                     yield torrent
         else:
@@ -143,7 +151,7 @@ class TorrentsList(object):
         if self.show_end_suspension():
             yield {'url': None, 'class': "disabled", 'name': "..."}
             yield {
-                'url': self.url(self.last_page), 
+                'url': self.url(self.last_page),
                 'class': "active" if self.page == self.last_page else None,
                 'name': self.last_page
             }
@@ -179,6 +187,7 @@ class Torrent(object):
     created = None
     file_nb = None
     size = None
+    categories = None
 
     seeds = None
     peers = None
@@ -199,6 +208,7 @@ class Torrent(object):
             'seeds': self.seeds,
             'peers': self.peers,
             'complete': self.complete,
+            'categories': self.categories,
             'last_scrape': self.last_scrape
         }
         if self.files is not None:
@@ -212,33 +222,41 @@ class Torrent(object):
         return data
 
     @staticmethod
-    def search(query, page=1, order_by=const.ORDER_BY_SCORE, asc=True):
+    def search(query, page=1, order_by=const.ORDER_BY_SCORE, asc=True, category=0, timezone='UTC'):
         db = getdb()
+        search_query = {}
+
         if re.match("^[0-9A-Fa-f]{40}$", query):
-            results = db.find(
-                {"$or": [
-                    {"$text": {"$search": query, '$language': "none"}},
-                    {"_id": Binary(query.decode("hex"))}
-                ]},
-                {"score": {"$meta": "textScore" }, 'files': False}
-               
-            )
-        else:
-            results = db.find(
+            search_query = {"$or": [
                 {"$text": {"$search": query, '$language': "none"}},
-                {"score": {"$meta": "textScore" }, 'files': False}
-            )
+                {"_id": Binary(query.decode("hex"))}
+            ]}
+        else:
+            search_query = {"$text": {"$search": query, '$language': "none"}}
+        if category > 0:
+            search_query = {"$and": [search_query, {'categories': const.categories[category-1]}]}
+        results = db.find(search_query, {"score": {"$meta": "textScore"}, 'files': False})
         return TorrentsList(
             results,
-            url=lambda page:reverse("btdht_search:index_query", kwargs=dict(page=page, query=query, order_by=order_by, asc=1 if asc else 0)) + '#results',
-            order_url=lambda order_by, asc:reverse("btdht_search:index_query", kwargs=dict(page=page, query=query, order_by=order_by, asc=asc)) + '#results',
+            url=lambda page: reverse(
+                "btdht_search:index_query",
+                kwargs=dict(
+                    page=page, query=query, order_by=order_by,
+                    asc=1 if asc else 0, category=category
+                )
+            ) + '#results',
+            order_url=lambda order_by, asc: reverse(
+                "btdht_search:index_query",
+                kwargs=dict(page=page, query=query, order_by=order_by, asc=asc, category=category)
+            ) + '#results',
             page=page,
             order_by=order_by,
-            asc=asc
+            asc=asc,
+            timezone=timezone
         )
 
     @staticmethod
-    def recent(page, max_results=None):
+    def recent(page, max_results=None, timezone='UTC'):
         db = getdb()
         results = db.find(
             {},
@@ -248,10 +266,14 @@ class Torrent(object):
         )
         return TorrentsList(
             results,
-            url=lambda page:reverse("btdht_search:recent", args=[page]) + '#recent', page=page, max_results=max_results
+            url=lambda page: reverse("btdht_search:recent", args=[page]) + '#recent',
+            page=page,
+            max_results=max_results,
+            timezone=timezone
         )
 
-    def __init__(self, hash=None, obj=None, no_files=False):
+    def __init__(self, hash=None, obj=None, no_files=False, timezone='UTC'):
+        self._timezone = timezone
         if obj is None and hash is not None:
             db = getdb()
 
@@ -273,6 +295,7 @@ class Torrent(object):
             self.peers = obj.get('peers')
             self.complete = obj.get('complete')
             self.last_scrape = obj.get('last_scrape', 0)
+            self.categories = obj.get('categories')
         else:
             raise ValueError("missing value to initialize Torrent object")
 
@@ -291,7 +314,11 @@ class Torrent(object):
     @property
     def magnet(self):
         trackers = "&".join("tr=%s" % urllib.quote(t) for t in settings.BTDHT_TRACKERS)
-        return "magnet:?xt=urn:btih:%s&db=%s&%s" % (self.hex_hash, self.name, trackers)
+        return "magnet:?xt=urn:btih:%s&db=%s&%s" % (
+            self.hex_hash,
+            urllib.quote(self.name.encode("utf-8")),
+            trackers
+        )
 
     @property
     def path(self):
@@ -318,8 +345,14 @@ class Torrent(object):
 
     @property
     def created_pp(self):
-        return format_date(self.created)
+        return format_date(self.created, timezone=self._timezone)
 
     @property
     def created_delta(self):
         return timedelta(seconds=int(time.time()) - self.created)
+
+    def categories_pp(self):
+        if self.categories:
+            return ", ".join(self.categories)
+        else:
+            return ""

@@ -1,18 +1,21 @@
 {% extends "btdht_search/base.html" %}
 {% load i18n %}
 {% load staticfiles %}
+{% load btdht_search %}
 {% block title %}BTDHT | Statistics{% endblock %}
 {% block content2 %}
 <h1>Statistics</h1>
 <h2>Torrent chart</h2>
-<canvas id="myChart" height="400" width="1000"></canvas>
-
+<div class="table-responsive" style="border: none">
+<table class="table"><tr><td style="border: none">
+<canvas id="torrent_chart" width="500" height="400"></canvas>
+</td></tr></table></div>
 <h2>Tracker scrape</h2>
 <p>
 Leecher/seeders/complete info are retreived from the trackers bellow.
 The result from the tracker with the maximum leecher/seeders/complete is displayed.
 </p>
-<h3>Trackers that respond to scrape requests</h3>
+<h3>Trackers that respond to our scrape requests</h3>
 {% if good_tracker %}
 <ul>
 {% for tracker in good_tracker %}
@@ -20,7 +23,7 @@ The result from the tracker with the maximum leecher/seeders/complete is display
 {% endfor%}
 </ul>
 {% endif %}
-<h3>Trackers that do NOT respond to scrape requests</h3>
+<h3>Trackers that do NOT respond to our scrape requests</h3>
 {% if bad_tracker %}
 <ul>
 {% for tracker in bad_tracker %}
@@ -37,61 +40,84 @@ The result from the tracker with the maximum leecher/seeders/complete is display
 
 
 {% block javascript_inline %}
-//$("#myChart").attr("height", $("#wrap").height() - 300);
-var ctx = document.getElementById("myChart");
-var myChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-        labels: {{times|safe}},
-        datasets: [
-          {
-            label: '# indexed torrents',
-            data: {{torrent_indexed|safe}},
-            fill: true,
-            backgroundColor: "rgba(239, 83, 80, 0.5)",
-            borderColor: "rgba(239, 83, 80, 1)",
-            pointBorderColor: "transparent",
-            pointBackgroundColor: "transparent",
-            pointHoverBackgroundColor: "rgba(183, 28, 28, 1)",
-            pointHoverBorderColor: "rgba(183, 28, 28, 1)",
-             
-          },
-{% comment %}
-          {
-            label: '# tracked torrent hashes',
-            data: {{hash_tracked|safe}},
-            fill: true,
-            //backgroundColor: "rgba(66, 165, 245, 0.5)",
-            //borderColor: "rgba(66, 165, 245, 1)",
-            //pointBorderColor: "rgba(66, 165, 245, 1)",
-            //pointBackgroundColor: "rgba(66, 165, 245, 1)",
-            //pointHoverBackgroundColor: "rgba(21, 101, 192, 1)",
-            //pointHoverBorderColor: "rgba(21, 101, 192, 1)",
-            
-          },
-{% endcomment %}
-        ]
-    },
-    options: {
-        maintainAspectRatio: false,
-        responsive: false,
-        scales: {
-            yAxes: [{
-                ticks: {
-                    beginAtZero:true
-                }
-            }],
-            xAxes: [{
-                type: 'time',
-                time: {
-                    parser: 'YYYY-MM-DD HH:mm:ss Z',
-                    displayFormats: {
-                        minute: 'HH:mm',
-                        hour: 'MMM D, H\\h',
-                    }
-                }
-            }]
-        }
+var torrent_chart_canvas = $("#torrent_chart");
+var doit;
+var current_width = 0;
+//$( window ).resize(function(){clearTimeout(doit);doit = setTimeout(resize_torrent_chart, 500);});
+$( window ).resize(function(){resize_torrent_chart(0);});
+function resize_torrent_chart(delay){
+    var height = $(window).width();
+    if(height <= 992 && current_width != 700){
+        torrent_chart_canvas.attr("width", 700);
+        current_width = 700;
+        setTimeout(draw_torrent_chart, delay);
+    } else if(height <= 1200 && height > 992 && current_width != 900){
+        torrent_chart_canvas.attr("width", 900);
+        current_width = 900;
+        setTimeout(draw_torrent_chart, delay);
+    } else if(height > 1200 && current_width != 1100){
+        torrent_chart_canvas.attr("width", 1100);
+        current_width = 1100;
+        setTimeout(draw_torrent_chart, delay);
     }
-});
+}
+function draw_torrent_chart(){
+    var ctx = document.getElementById("torrent_chart");
+    var myChart = new Chart(ctx,{% nospace %}{
+        type: 'line',
+        data: {
+            datasets: [
+                {
+                    label: '# torrents',
+                    data: {{torrent_indexed|safe}},
+                    fill: false,
+                    backgroundColor: "rgba(239, 83, 80, 0.5)",
+                    borderColor: "rgba(239, 83, 80, 1)",
+                    pointBorderColor: "transparent",
+                    pointBackgroundColor: "transparent",
+                    pointHoverBackgroundColor: "rgba(239, 83, 80, 1)",
+                    pointHoverBorderColor: "rgba(239, 83, 80, 1)",
+             
+                },
+                {% for cat_name, data, col in categories %}
+                {
+                    label: '# {{cat_name}} torrents',
+                    data: {{data|safe}},
+                    fill: false,
+                    pointBorderColor: "transparent",
+                    pointBackgroundColor: "transparent",
+                    backgroundColor: "rgba({{col.0}}, {{col.1}}, {{col.2}}, 0.5)",
+                    borderColor: "rgba({{col.0}}, {{col.1}}, {{col.2}}, 1)",
+                    pointHoverBackgroundColor: "rgba({{col.0}}, {{col.1}}, {{col.2}}, 1)",
+                    pointHoverBorderColor: "rgba({{col.0}}, {{col.1}}, {{col.2}}, 1)",
+                },
+                {% endfor %}
+            ]
+        },
+        options: {
+            animation: false,
+            maintainAspectRatio: false,
+            responsive: false,
+            scales: {
+                yAxes: [{
+                    ticks: {
+                        beginAtZero:true
+                    }
+                }],
+                xAxes: [{
+                    type: 'time',
+                    time: {
+                        parser: 'YYYY-MM-DD HH:mm:ss Z',
+                        displayFormats: {
+                            minute: 'HH:mm',
+                            hour: 'MMM D, H\\h',
+                        }
+                    }
+                }]
+            }
+        }
+    });
+}
+resize_torrent_chart(0);
+{% endnospace %}
 {% endblock %}

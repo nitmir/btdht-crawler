@@ -15,6 +15,14 @@
 >{% spaceless %}
   {% if field|is_checkbox %}
     <div class="checkbox"><label for="{{field.auto_id}}">{{field}}{{field.label}}</label></div>
+  {% elif field|is_radio %}
+    <div class="text-center form-radio">
+    {% for cat in field %}
+    <label class="radio-inline">
+       {{cat.tag}}{{cat.choice_label}}
+    </label>
+    {% endfor %}
+    </div>
   {% else %}
     <label class="control-label" for="{{field.auto_id}}">{{field.label}}</label>
     {{field}}

@@ -24,13 +24,17 @@ BTDHT_SHOW_POWERED = True
 BTDHT_COMPONENT_URLS = {
     "bootstrap3_css": "//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css",
     "bootstrap3_js": "//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js",
-#    "fontawesome": "//maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css",
+    "datatable_js": "//cdn.datatables.net/1.10.12/js/jquery.dataTables.min.js",
+    "datatable_css": "//cdn.datatables.net/1.10.12/css/dataTables.bootstrap.min.css",
+    "datatable_filesize": "//cdn.datatables.net/plug-ins/1.10.12/sorting/file-size.js",
+    # "fontawesome": "//maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css",
     "html5shiv": "//oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js",
     "respond": "//oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js",
     "jquery": "//code.jquery.com/jquery.min.js",
-    "chart_js": "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.3.0/Chart.bundle.min.js"
+    "jquery_cookie": "https://cdnjs.cloudflare.com/ajax/libs/jquery-cookie/1.4.1/jquery.cookie.js",
+    "chart_js": "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.3.0/Chart.bundle.min.js",
+    "jstz": "https://cdnjs.cloudflare.com/ajax/libs/jstimezonedetect/1.0.6/jstz.js",
 }
-
 
 
 BTDHT_MONGODB = "btdht-crawler"
@@ -50,6 +54,10 @@ BTDHT_TRACKERS = [
     "udp://tracker.pirateparty.gr:6969/announce",
 
     "udp://tracker.desu.sh:6969",
+
+    "udp://tracker.internetwarriors.net:1337/announce",
+    "udp://tracker.openbittorrent.com:80/announce",
+    "udp://explodie.org:6969",
 ]
 
 BTDHT_TRACKERS_NO_SCRAPE = [
@@ -60,6 +68,7 @@ BTDHT_TRACKERS_NO_SCRAPE = [
 BTDHT_TORRENTS_BASE_PATH = None
 
 BTDHT_PAGE_SIZE = 25
+BTDHT_RECENT_MAX = 124999
 
 BTDHT_SCRAPE_MIN_INTERVAL = 600
 BTDHT_SCRAPE_BROWSE_INTERVAL = 3600
@@ -69,6 +78,9 @@ BTDHT_HIDE_MAGNET_FROM_UNAUTH = False
 BTDHT_HIDE_TORRENT_LINK_FROM_UNAUTH = True
 
 BTDHT_TOKEN_AUTH_BACKEND = None
+
+BTDHT_SITEMAP_DIR = None
+BTDHT_SITEMAP_BASEURL = None
 
 GLOBALS = globals().copy()
 for name, default_value in GLOBALS.items():

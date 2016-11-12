@@ -12,7 +12,7 @@
 from django import template
 from django import forms
 
-from datetime import datetime
+import re
 
 from ..utils import format_size, format_date, absolute_url as utils_absolute_url
 
@@ -31,6 +31,18 @@ def is_checkbox(field):
     return isinstance(field.field.widget, forms.CheckboxInput)
 
 
+@register.filter(name='is_radio')
+def is_radio(field):
+    """
+        check if a form bound field is a radio
+
+       :param django.forms.BoundField field: A bound field
+       :return: ``True`` if the field is a radio, ``False`` otherwise.
+       :rtype: bool
+    """
+    return isinstance(field.field.widget, forms.RadioSelect)
+
+
 @register.filter(name='is_hidden')
 def is_hidden(field):
     """
@@ -47,6 +59,7 @@ def is_hidden(field):
 def size_pp(size):
     return format_size(size)
 
+
 @register.filter(name='date_pp')
 def date_pp(timestamp):
     return format_date(timestamp)
@@ -57,6 +70,30 @@ def replace(value, arg):
     (match, rep) = arg.split(':')
     return value.replace(match, rep)
 
+
 @register.filter(name='absolute_url')
 def absolute_url(path, request):
     return utils_absolute_url(request, path)
+
+
+class NoSpace(template.Node):
+    def __init__(self, nodelist):
+        self.nodelist = nodelist
+
+    def render(self, context):
+        return self.remove_whitespace(self.nodelist.render(context).strip())
+
+    def remove_whitespace(self, value):
+        value = re.sub(r'\n', '', value)
+        value = re.sub(r' +', '', value)
+        return value
+
+
+@register.tag(name='nospace')
+def nospace(parser, token):
+    """
+    Remove all whitespace from content
+    """
+    nodelist = parser.parse(('endnospace',))
+    parser.delete_first_token()
+    return NoSpace(nodelist)

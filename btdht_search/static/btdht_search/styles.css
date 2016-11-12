@@ -31,6 +31,17 @@ body {
     margin:auto;
 }
 
+.form-radio {
+    margin: 0 -12%;
+}
+
+@media (max-width: 1200px) {
+    .container{
+        max-width: 1070px;
+//        margin: 0;
+    }
+}
+
 @media screen and (max-width: 680px) {
     #app-name {
         margin: 0;
@@ -38,4 +49,57 @@ body {
    #app-name img {
         width:130px;
     }
+
+    .form-radio {
+        margin: 0 0;
+    }
+}
+.navbar-form {
+    padding: 0;
+}
+select.select-noarrow {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    text-indent: 1px;
+    text-overflow: '';
+}
+
+select.select-noarrow::-ms-expand {
+    display: none;
+}
+
+#nav-search-select {
+    width: 75px;
+    padding: 0;
+    margin: 0;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    border-left: none;
+}
+
+
+.full-width {
+    width: *;
+    word-wrap:break-word;
+    word-break: break-all;
+}
+
+.navbar-brand img {
+    width: 40px;
+}
+
+@media (max-width: 768px) {
+    .full-width {
+        min-width: 280px;
+        white-space: normal !important;
+    }
+}
+
+@-moz-document url-prefix() {
+  fieldset { display: table-cell; }
+}
+
+#torrent_chart {
+    width: 1000px;
+    height: 400px;
 }

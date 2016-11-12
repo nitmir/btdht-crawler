@@ -1,0 +1,9 @@
+{% load btdht_search %}
+<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+{% for page in pages %}  <sitemap>
+    <!-- {{page.nb_results}} pages -->
+    <loc>{% url "btdht_search:sitemap" page.page as url %}{{url|absolute_url:request}}</loc>
+    <lastmod>{{page.last_change}}</lastmod>
+  </sitemap>
+{% endfor %}</sitemapindex>

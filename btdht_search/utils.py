@@ -20,17 +20,18 @@ from django.contrib.auth import login
 
 import os
 import pymongo
-import socket
 import time
 import json
 import hashlib
-from threading import Thread
+from six.moves import urllib
 from bson.binary import Binary
 from datetime import datetime
 from functools import wraps
+import pytz
 
-from .scraper import scrape as scrape_one_tracker
+from .scraper import scrape_max
 import const
+
 
 def token_auth(view):
     @wraps(view)
@@ -43,8 +44,10 @@ def token_auth(view):
             raise PermissionDenied()
     return wrap
 
+
 def random_token():
     return hashlib.md5(os.urandom(16)).hexdigest()
+
 
 def context(params):
     """
@@ -70,7 +73,6 @@ def getdb(collection="torrents_data"):
         return getdb.db[collection]
 
 
-
 def format_size(i):
     if i > 1024**4:
         return "%s TB" % round(i/(1024.0**4), 2)
@@ -84,61 +86,58 @@ def format_size(i):
         return "%s B" % i
 
 
-def format_date(timestamp, format='%Y-%m-%d %H:%M:%S'):
-    return datetime.utcfromtimestamp(timestamp).strftime(format)
-
-
-def _scrape(tracker, hashs, results):
+def format_date(timestamp, format='%Y-%m-%d %H:%M:%S', timezone='UTC'):
     try:
-        results[tracker] = scrape_one_tracker(tracker, hashs)
-    except (socket.timeout, socket.gaierror):
-        pass
+        tzlocal = pytz.timezone(urllib.parse.unquote(timezone))
+    except pytz.UnknownTimeZoneError:
+
+        tzlocal = pytz.utc
+    tzutc = pytz.utc
+    return datetime.utcfromtimestamp(
+        timestamp
+    ).replace(tzinfo=tzutc).astimezone(tzlocal).strftime(format)
+
 
 def scrape(hashs, refresh=False):
     db = getdb()
     result = {}
     if refresh is False:
-         db_results = db.find(
-             {'$or': [{"_id": Binary(hash)} for hash in hashs]},
-             {'seeds': True, 'peers': True, 'complete': True, 'last_scrape': True}
-         )
-         db_hashs = {}
-         for r in db_results:
-             if 'last_scrape' in r:
-                 if time.time() - r['last_scrape'] <= settings.BTDHT_SCRAPE_MIN_INTERVAL:
-                     result[str(r['_id'])] = {'seeds': r['seeds'], 'peers': r['peers'], 'complete': r['complete'], 'last_scrape': r['last_scrape']}
+        db_results = db.find(
+            {'$or': [{"_id": Binary(hash)} for hash in hashs]},
+            {'seeds': True, 'peers': True, 'complete': True, 'last_scrape': True}
+        )
+        for r in db_results:
+            if 'last_scrape' in r:
+                if time.time() - r['last_scrape'] <= settings.BTDHT_SCRAPE_MIN_INTERVAL:
+                    result[str(r['_id'])] = {
+                        'seeds': r['seeds'],
+                        'peers': r['peers'],
+                        'complete': r['complete'],
+                        'last_scrape': r['last_scrape']
+                    }
     hashs_to_scrape = [h for h in hashs if h not in result]
     if hashs_to_scrape:
         bad_tracker = scrape.bad_tracker
         for tracker in bad_tracker.keys():
-            if time.time() - bad_tracker[tracker] > (24 * 3600):
+            if time.time() - bad_tracker[tracker] > 1800:
                 del bad_tracker[tracker]
-        threads = []
-        results = {}
+        good_trackers = [
+            tracker for tracker in settings.BTDHT_TRACKERS
+            if tracker not in bad_tracker and tracker not in settings.BTDHT_TRACKERS_NO_SCRAPE
+        ]
+        (result_trackers, scrape_result) = scrape_max(
+            good_trackers,
+            hashs_to_scrape,
+            udp_timeout=1.5
+        )
         for tracker in settings.BTDHT_TRACKERS:
-            if tracker not in bad_tracker and tracker not in settings.BTDHT_TRACKERS_NO_SCRAPE:
-                t = Thread(target=_scrape, args=(tracker, hashs_to_scrape, results))
-                t.daemon = True
-                t.start()
-                threads.append(t)
-        for t in threads:
-            t.join()
-        for tracker in settings.BTDHT_TRACKERS:
-            if tracker not in results and tracker not in bad_tracker and tracker not in settings.BTDHT_TRACKERS_NO_SCRAPE:
+            if (
+                tracker not in result_trackers and
+                tracker not in bad_tracker and
+                tracker not in settings.BTDHT_TRACKERS_NO_SCRAPE
+            ):
                 bad_tracker[tracker] = time.time()
         scrape.bad_tracker = bad_tracker
-        scrape_result = {}
-        for hash in hashs_to_scrape:
-            scrape_result[hash] = {'complete': -1, 'peers': -1, 'seeds': -1}
-        for tracker in results.values():
-            for hash in tracker:
-                 scrape_result[hash]['complete'] = max(scrape_result[hash]['complete'], tracker[hash]['complete'])
-                 scrape_result[hash]['peers'] = max(scrape_result[hash]['peers'], tracker[hash]['peers'])
-                 scrape_result[hash]['seeds'] = max(scrape_result[hash]['seeds'], tracker[hash]['seeds'])
-        # delete hash where no results where returned
-        for hash in hashs_to_scrape:
-            if scrape_result[hash]['seeds'] < 0 or scrape_result[hash]['peers'] < 0 or scrape_result[hash]['complete'] < 0:
-                del scrape_result[hash]
         result.update(scrape_result)
         now = int(time.time())
         for hash, value in scrape_result.items():
@@ -149,7 +148,6 @@ def scrape(hashs, refresh=False):
                 pass
         return result
 scrape.bad_tracker = {}
-    
 
 
 def require_login(funct):
@@ -165,5 +163,13 @@ def render_json(data):
 
 def absolute_url(request, path):
     return "%s://%s%s" % (request.scheme, request.get_host(), path)
+
+
+def normalize_name(name):
+    name = name.replace('\r\n', ' ')
+    name = name.replace('\n', '')
+    name = name.replace('\r', '')
+    return name
+
 
 import models

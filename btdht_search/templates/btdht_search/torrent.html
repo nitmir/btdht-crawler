@@ -4,6 +4,29 @@
 
 {% block title %}BTDHT | {{torrent.name}}{% endblock %}
 
+{% block javascript %}
+<script src="{{settings.BTDHT_COMPONENT_URLS.datatable_js}}"></script>
+<script src="{{settings.BTDHT_COMPONENT_URLS.datatable_filesize}}"></script>
+{% endblock %}
+
+{% block extra_head %}
+<link href="{{settings.BTDHT_COMPONENT_URLS.datatable_css}}" rel="stylesheet">
+{% endblock %}
+
+{% block javascript_inline %}
+$(document).ready(function(){
+    $('#files_table').DataTable({
+        paging: false,
+        columnDefs: [{ type: 'file-size', targets: 1 }]
+    });
+    var search_input = $('#files_table_filter').find('input')
+    search_input.addClass("form-control");
+    search_input.css('width', 'auto');
+    search_input.css('display', 'inline');
+    $('#files_table_info').hide();
+});
+{% endblock %}
+
 {% block content2 %}
 <br/>
 <h1>Torrent infos</h1>
@@ -11,7 +34,10 @@
 <tr><th>Name</th><td>{{torrent.name}}</td></tr>
 <tr><th>Files</th><td>{% if torrent.files %}<a href="#torrent_files">{{torrent.file_nb}}</a>{% else %}{{torrent.file_nb}}{% endif %}</td></tr>
 <tr><th>Size</th><td>{{torrent.size_pp}} ({{torrent.size}} Bytes)</td></tr>
-<tr><th>Uploaded</th><td>{{torrent.created_pp}}</td></tr>
+{% if torrent.categories %}
+<tr><th>{% if torrent.categories|length > 1 %}Categories{% else %}Category{% endif %}</th><td>{{torrent.categories_pp}}</td></tr>
+{% endif %}
+<tr><th>Uploaded</th><td>{{torrent.created_pp}}{% if request.COOKIES.timezone is None %} UTC{% endif %}</td></tr>
 <tr><th>Info Hash</th><td>{{torrent.hex_hash.upper}}</td></tr>
 </table>
 <h2>Torrent status</h2>
@@ -34,20 +60,16 @@
     <ul class="list-group">
       {% if not settings.BTDHT_HIDE_MAGNET_FROM_UNAUTH or request.user.is_authenticated %}
       <li class="list-group-item">
-        <a href="{{torrent.magnet}}">
-          <button type="button" class="btn btn-success btn-block btn-lg">
+        <a href="{{torrent.magnet}}" class="btn btn-success btn-block btn-lg">
             <span class="glyphicon glyphicon-magnet" aria-hidden="true"></span> Magnet
-          </button>
         </a>
       </li>
       {% endif %}
       {% if not settings.BTDHT_HIDE_TORRENT_LINK_FROM_UNAUTH or request.user.is_authenticated %}
       {% if torrent.url %}
       <li class="list-group-item">
-        <a href="{{torrent.url}}">
-          <button type="button" class="btn btn-info btn-block btn-lg">
+        <a href="{{torrent.url}}" class="btn btn-info btn-block btn-lg">
             <span class="glyphicon glyphicon-download-alt" aria-hidden="true"></span> Torrent file
-          </button>
         </a>
       </li>
       {% endif %}
@@ -59,11 +81,13 @@
 {% endif %}
 {% if torrent.files %}
 <h2 id="torrent_files">Torrent Files</h2>
-<table class="table table-striped table-condensed table-responsive">
-<tr><th>Path</th><th>Size</th></tr>
+<table class="table table-striped table-condensed table-responsive" id="files_table">
+<thead><tr><th>Path</th><th>Size</th></tr></thead>
+<tbody>
 {% for file in torrent.files %}
 <tr><td>{{file.path}}</td><td class="text-nowrap">{{file.size|size_pp}}</td></tr>
 {% endfor %}
+</tbody>
 </table>
 {% endif %}
 {% endblock %}

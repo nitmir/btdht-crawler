@@ -22,14 +22,20 @@
 
 
 {% block content2 %}
-{% if torrents %}<h1 id="results">Search results</h1>{% endif %}
+{% if torrents %}
+<h1 id="results">
+  Search results
+  <span id="add_fav" class="glyphicon glyphicon-star-empty pull-right" title="Mark as favorite" style="display: none; cursor:pointer"></span>
+  <span id="del_fav" class="glyphicon glyphicon-star pull-right" title="Delete favorite" style="display: none; color:#ffbb33; cursor:pointer"></span>
+</h1>
+{% endif %}
 {% include "btdht_search/torrent_table.html" %}
 {% endblock %}
 
-{% block javascript_inline %}
+{% block javascript_inline %}{% if torrents %}
 $(document).ready(function () {
     $(".pagination").rPage();
+    init_search_fav()
 });
-window.location.replace("#");
-{% endblock %}
+{% endif %}{% endblock %}
 
