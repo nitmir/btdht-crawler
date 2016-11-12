@@ -14,22 +14,27 @@ from bson.binary import Binary
 
 import config
 
+
 def decode_leechers_paradise_hash(h):
-    r=[]
-    i=0
+    r = []
+    i = 0
     l = len(h)
     while i < l:
         if h[i] == '%':
             r.append(h[i+1:i+3].decode("hex"))
-            i+=3
+            i += 3
         else:
             r.append(h[i])
-            i+=1
+            i += 1
     return "".join(r)
 
+
 def widget(what=""):
-    padding = 30
-    return [progressbar.ETA(), ' ', progressbar.Bar('='), ' ', progressbar.SimpleProgress(), ' ' if what else "", what]
+    return [
+        progressbar.ETA(), ' ', progressbar.Bar('='), ' ', progressbar.SimpleProgress(),
+        ' ' if what else "", what
+    ]
+
 
 tracker_scrape_url = {
     'leechers-paradise': ("http://scrape.leechers-paradise.org/static_scrape", 900),
@@ -39,6 +44,7 @@ tracker_scrape_url = {
     'pirateparty': ("http://tracker.pirateparty.gr/full_scrape.tar.gz", 3600),
     'internetwarriors': ("http://internetwarriors.net/full.tar.gz", 300),
 }
+
 
 class Scraper(object):
 
@@ -84,8 +90,11 @@ class Scraper(object):
             p.wait()
             os.remove(path)
         elif path.endswith(".gz"):
-           p = subprocess.Popen(['gunzip', '-f', os.path.basename(path)], cwd=os.path.dirname(path))
-           p.wait()
+            p = subprocess.Popen(
+                ['gunzip', '-f', os.path.basename(path)],
+                cwd=os.path.dirname(path)
+            )
+            p.wait()
         sys.stdout.write(".")
         sys.stdout.flush()
 
@@ -124,8 +133,8 @@ class Scraper(object):
                 {'last_scrape': {'$in': [0, None]}},
                 {'peers': {'$in': [-1, None]}},
                 {'seeds': {'$in': [-1, None]}},
-            ]}
-            , {'_id': True}
+            ]},
+            {'_id': True}
         ))
         print "OK"
         now = int(time.time())
@@ -137,7 +146,10 @@ class Scraper(object):
             sys.stdout.flush()
             trackers.append(self.load(name, hashs))
             print "OK"
-        pbar = progressbar.ProgressBar(widgets=widget("scraping torrents"), maxval=len(hashs)).start()
+        pbar = progressbar.ProgressBar(
+            widgets=widget("scraping torrents"),
+            maxval=len(hashs)
+        ).start()
         for hash in hashs:
             peers = -1
             seeds = -1
@@ -159,15 +171,32 @@ class Scraper(object):
         pbar.finish()
 
     def incremental_scrape(self):
-        hashes = set(str(h['_id']) for h in self.db.find({'last_scrape': {'$in': [0, None]}}, {'_id': True}))
+        hashes = set(
+            str(h['_id']) for h in self.db.find(
+                {'last_scrape': {'$in': [0, None]}},
+                {'_id': True}
+            )
+        )
         print len(hashes)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--full-scrape", help="Scrape all torrent in the database from downloaded scrape files", action="store_true")
-    parser.add_argument("--download-scrape", help="Download scrape files from configured torrent sites", action="store_true")
-    parser.add_argument("--incremental-scrape", help="Scrape new torrent not previously scraped", action="store_true")
+    parser.add_argument(
+        "--full-scrape",
+        help="Scrape all torrent in the database from downloaded scrape files",
+        action="store_true"
+    )
+    parser.add_argument(
+        "--download-scrape",
+        help="Download scrape files from configured torrent sites",
+        action="store_true"
+    )
+    parser.add_argument(
+        "--incremental-scrape",
+        help="Scrape new torrent not previously scraped",
+        action="store_true"
+    )
     args = parser.parse_args()
     scraper = Scraper()
     if args.download_scrape:

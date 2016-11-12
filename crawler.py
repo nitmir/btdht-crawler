@@ -1,25 +1,23 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import os
-import sys
 import time
 import psutil
 import socket
 import struct
 import collections
 import multiprocessing
-import threading
-from threading import Thread, Lock
+from threading import Thread
 from btdht import DHT, ID, RoutingTable
 from btdht.utils import enumerate_ids
 
 import pymongo
 from bson.binary import Binary
 
-
 import config
 import resource
 import torrent
+
 
 class HashToIgnore(object):
     hash_to_ignore = set()
@@ -31,7 +29,6 @@ class HashToIgnore(object):
         else:
             self.db = db
 
-
     def add(self, item):
         self.hash_to_ignore.add(item)
         try:
@@ -40,9 +37,11 @@ class HashToIgnore(object):
             pass
 
     def __contains__(self, item, errno=0):
-        if not item in self.hash_to_ignore:
+        if item not in self.hash_to_ignore:
             if time.time() - self.hash_not_to_ignore[item] > 600:
-                if os.path.isfile(os.path.join(config.torrents_dir, "%s.torrent" % item.encode("hex"))):
+                if os.path.isfile(
+                    os.path.join(config.torrents_dir, "%s.torrent" % item.encode("hex"))
+                ):
                     self.hash_to_ignore.add(item)
                     try:
                         del self.hash_not_to_ignore[item]
@@ -50,7 +49,9 @@ class HashToIgnore(object):
                         pass
                     return True
                 try:
-                    if self.db.find({"_id": Binary(item), "status":{"$nin": [0, None]}}).count() >  0:
+                    if self.db.find(
+                        {"_id": Binary(item), "status": {"$nin": [0, None]}}
+                    ).count() > 0:
                         self.hash_to_ignore.add(item)
                         try:
                             del self.hash_not_to_ignore[item]
@@ -60,18 +61,19 @@ class HashToIgnore(object):
                     else:
                         self.hash_not_to_ignore[item] = time.time()
                         return False
-                except pymongo.errors.AutoReconnect as e:
-                     return self.__contains__(item, errno=errno+1)
+                except pymongo.errors.AutoReconnect:
+                    return self.__contains__(item, errno=errno+1)
             else:
                 return False
         else:
             return True
 
+
 class Crawler(DHT):
     def __init__(self, *args, **kwargs):
         super(Crawler, self).__init__(*args, **kwargs)
         if self.master:
-            self.root.client = torrent.Client(debug=self.debuglvl>0)
+            self.root.client = torrent.Client(debug=(self.debuglvl > 0))
         self.register_message("get_peers")
         self.register_message("announce_peer")
 
@@ -79,7 +81,6 @@ class Crawler(DHT):
         if self.master:
             self.root.client.stoped = True
         super(Crawler, self).stop()
-
 
     def start(self):
         # doing some initialisation
@@ -117,25 +118,52 @@ class Crawler(DHT):
             for hash in self.hash_to_fetch.keys():
                 if self.stoped:
                     return
-                if hash in self.root.client.meta_data or os.path.isfile(os.path.join(config.torrents_dir, "%s.torrent" % hash.encode("hex"))):
-                    if hash in self.root.client.meta_data and self.root.client.meta_data[hash] is not True:
-                        with open(os.path.join(config.torrents_dir, "%s.torrent.new" % hash.encode("hex")), 'wb') as f:
+                if (
+                    hash in self.root.client.meta_data or
+                    os.path.isfile(
+                        os.path.join(config.torrents_dir, "%s.torrent" % hash.encode("hex"))
+                    )
+                ):
+                    if (
+                        hash in self.root.client.meta_data and
+                        self.root.client.meta_data[hash] is not True
+                    ):
+                        with open(
+                            os.path.join(
+                                config.torrents_dir,
+                                "%s.torrent.new" % hash.encode("hex")
+                            ),
+                            'wb'
+                        ) as f:
                             f.write("d4:info%se" % self.root.client.meta_data[hash])
                         os.rename(
-                            os.path.join(config.torrents_dir, "%s.torrent.new" % hash.encode("hex")),
+                            os.path.join(
+                                config.torrents_dir,
+                                "%s.torrent.new" % hash.encode("hex")
+                            ),
                             os.path.join(config.torrents_dir, "%s.torrent" % hash.encode("hex"))
                         )
-                        self.root.db.update({'_id': Binary(hash)}, {"$set": {'status': 1}}, upsert=True)
+                        self.root.db.update(
+                            {'_id': Binary(hash)},
+                            {"$set": {'status': 1}},
+                            upsert=True
+                        )
                         self.debug(1, "%s downloaded" % hash.encode("hex"))
                     self.root.client.meta_data[hash] = True
                     self.root.client.clean_hash(hash)
                     self.root.hash_to_ignore.add(hash)
-                    try: del self.hash_to_fetch[hash]
-                    except: pass
-                    try: del self.hash_to_fetch_tried[hash]
-                    except: pass
-                    try: del self.hash_to_fetch_totry[hash]
-                    except: pass
+                    try:
+                        del self.hash_to_fetch[hash]
+                    except:
+                        pass
+                    try:
+                        del self.hash_to_fetch_tried[hash]
+                    except:
+                        pass
+                    try:
+                        del self.hash_to_fetch_totry[hash]
+                    except:
+                        pass
                     del self.root.client.meta_data[hash]
                 else:
                     self.get_peers(hash, block=False, limit=1000)
@@ -146,24 +174,30 @@ class Crawler(DHT):
                             self.root.client.add(ip, port, hash)
                             processed = True
                         except KeyError:
-                            last_fail[hash]=time.time()
-                            failed_count[hash]+=1
+                            last_fail[hash] = time.time()
+                            failed_count[hash] += 1
                         if failed_count[hash] >= 18:
                             self.root.client.meta_data[hash] = True
                             self.root.client.clean_hash(hash)
-                            self.root.good_info_hash[hash]=time.time()
-                            try: del self.hash_to_fetch[hash]
-                            except: pass
-                            try: del self.hash_to_fetch_tried[hash]
-                            except: pass
-                            try: del self.hash_to_fetch_totry[hash]
-                            except: pass
+                            self.root.good_info_hash[hash] = time.time()
+                            try:
+                                del self.hash_to_fetch[hash]
+                            except:
+                                pass
+                            try:
+                                del self.hash_to_fetch_tried[hash]
+                            except:
+                                pass
+                            try:
+                                del self.hash_to_fetch_totry[hash]
+                            except:
+                                pass
                             self.debug(1, "%s failed" % hash.encode("hex"))
                             del failed_count[hash]
                             del self.root.client.meta_data[hash]
             if not processed:
                 self.sleep(10)
-                
+
     def clean(self):
         pass
 
@@ -187,41 +221,54 @@ class Crawler(DHT):
 
             self.save(max_node=4000)
 
-
     def on_get_peers_response(self, query, response):
         if response.get("values"):
             info_hash = query.get("info_hash")
             if info_hash:
-                if not info_hash in self.hash_to_fetch and not info_hash in self.root.hash_to_ignore:
-                    self.hash_to_fetch[info_hash]=time.time()
-                    #self.root.good_info_hash[info_hash]=time.time()
-                    try: del self.root.bad_info_hash[info_hash]
-                    except KeyError: pass
+                if (
+                    info_hash not in self.hash_to_fetch and
+                    info_hash not in self.root.hash_to_ignore
+                ):
+                    self.hash_to_fetch[info_hash] = time.time()
+                    try:
+                        del self.root.bad_info_hash[info_hash]
+                    except KeyError:
+                        pass
                 if info_hash in self.hash_to_fetch:
                     for ipport in response.get("values", []):
                         (ip, port) = struct.unpack("!4sH", ipport)
                         ip = socket.inet_ntoa(ip)
-                        if not (ip, port) in self.hash_to_fetch_tried[info_hash]:
+                        if (ip, port) not in self.hash_to_fetch_tried[info_hash]:
                             self.hash_to_fetch_totry[info_hash].add((ip, port))
 
     def on_get_peers_query(self, query):
         info_hash = query.get("info_hash")
         if info_hash:
-            if not info_hash in self.root.bad_info_hash and not info_hash in self.root.good_info_hash and not info_hash in self.root.hash_to_ignore and not info_hash in self.hash_to_fetch:
+            if (
+                info_hash not in self.root.bad_info_hash and
+                info_hash not in self.root.good_info_hash and
+                info_hash not in self.root.hash_to_ignore and
+                info_hash not in self.hash_to_fetch
+            ):
                 self.determine_info_hash(info_hash)
 
     def on_announce_peer_query(self, query):
         info_hash = query.get("info_hash")
         if info_hash:
             if info_hash not in self.root.hash_to_ignore:
-                self.hash_to_fetch[info_hash]=time.time()
-            self.root.good_info_hash[info_hash]=time.time()
-            try: del self.root.bad_info_hash[info_hash]
-            except KeyError: pass
+                self.hash_to_fetch[info_hash] = time.time()
+            self.root.good_info_hash[info_hash] = time.time()
+            try:
+                del self.root.bad_info_hash[info_hash]
+            except KeyError:
+                pass
 
     def get_hash_to_ignore(self, errornb=0):
         try:
-            results = self.root.db.find({"status":{"$nin": [0, None]}}, {"_id": True, "status": False})
+            results = self.root.db.find(
+                {"status": {"$nin": [0, None]}},
+                {"_id": True, "status": False}
+            )
             hashs = set(r["status"] for r in results)
             self.debug(0, "Returning %s hash to ignore" % len(hashs))
             return hashs
@@ -231,16 +278,14 @@ class Crawler(DHT):
                 raise
             time.sleep(0.1)
             return self.get_hash_to_ignore(errornb=1+errornb)
-        
+
     def determine_info_hash(self, hash):
         def callback(peers):
             if peers:
-                self.root.good_info_hash[hash]=time.time()
+                self.root.good_info_hash[hash] = time.time()
             else:
-                self.root.bad_info_hash[hash]=time.time()
+                self.root.bad_info_hash[hash] = time.time()
         self.get_peers(hash, delay=15, block=False, callback=callback, limit=1000)
-
-
 
 
 def get_id(id_file):
@@ -254,10 +299,10 @@ def get_id(id_file):
             f.write(str(id))
         return id
 
+
 def lauch(debug, id_file="crawler1.id", lprefix="", worker_alive=None):
     global stoped
     print "%slauch %s" % (lprefix, id_file)
-    #resource.setrlimit(resource.RLIMIT_AS, (config.crawler_max_memory, -1)) #limit to one kilobyt
     resource.setrlimit(resource.RLIMIT_NOFILE, (4096, 4096))
     id_base = get_id(id_file)
 
@@ -275,15 +320,30 @@ def lauch(debug, id_file="crawler1.id", lprefix="", worker_alive=None):
         f.write(str(pid))
 
     port_base = config.crawler_base_port
-    prefix=1
+    prefix = 1
     routing_table = RoutingTable(debuglvl=debug)
-    dht_base = Crawler(bind_port=port_base + ord(id_base[0]), id=id_base, debuglvl=debug, prefix="%s%02d:" % (lprefix, prefix), master=True, routing_table=routing_table)
+    dht_base = Crawler(
+        bind_port=port_base + ord(id_base[0]),
+        id=id_base,
+        debuglvl=debug,
+        prefix="%s%02d:" % (lprefix, prefix),
+        master=True,
+        routing_table=routing_table
+    )
     liveness = [routing_table, dht_base]
     for id in enumerate_ids(config.crawler_instance, id_base):
         if id == id_base:
             continue
-        prefix+=1
-        liveness.append(Crawler(bind_port=port_base + ord(id[0]), id=ID(id), routing_table=routing_table, debuglvl=debug, prefix="%s%02d:" % (lprefix, prefix)))
+        prefix += 1
+        liveness.append(
+            Crawler(
+                bind_port=port_base + ord(id[0]),
+                id=ID(id),
+                routing_table=routing_table,
+                debuglvl=debug,
+                prefix="%s%02d:" % (lprefix, prefix)
+            )
+        )
 
     stoped = False
     try:
@@ -314,6 +374,7 @@ def lauch(debug, id_file="crawler1.id", lprefix="", worker_alive=None):
         dht_base.save(max_node=4000)
         print("exit")
 
+
 def stop(liveness):
     global stoped
     stoped = True
@@ -335,11 +396,14 @@ def worker(debug):
     try:
         worker_alive = multiprocessing.Value('i', int(time.time()))
         for i in range(1, config.crawler_worker + 1):
-            jobs[i]=multiprocessing.Process(target=lauch, args=(debug, "crawler%s.id" % i, "W%s:" % i, worker_alive))
+            jobs[i] = multiprocessing.Process(
+                target=lauch,
+                args=(debug, "crawler%s.id" % i, "W%s:" % i, worker_alive)
+            )
             jobs[i].daemon = True
             jobs[i].start()
-        stats={}
-        mem={}
+        stats = {}
+        mem = {}
         while True:
             worker_alive.value = int(time.time())
             for i, p in jobs.items():
@@ -357,24 +421,31 @@ def worker(debug):
                             print("crawler%s no activity since 30s, killing" % i)
                             if stats[i][3] < 5:
                                 p.terminate()
-                                stats[i]=stats[i][0:3] + (stats[i][3] + 1, )
+                                stats[i] = stats[i][0:3] + (stats[i][3] + 1, )
                             else:
                                 os.system("kill -9 %s" % p.pid)
                     else:
                         stats[i] = (c[0], c[1], time.time(), 0)
                 except(psutil.NoSuchProcess, psutil.AccessDenied):
-                    try: del stats[i]
-                    except KeyError: pass
+                    try:
+                        del stats[i]
+                    except KeyError:
+                        pass
 
                 if sum(mem.values()) > config.crawler_max_memory:
                     raise EnvironmentError("Reach memory limit, exiting")
                 # if a worker died then respan it
                 if not p.is_alive():
                     print("crawler%s died, respawning" % i)
-                    jobs[i]=multiprocessing.Process(target=lauch, args=(debug, "crawler%s.id" % i, "W%s:" % i))
+                    jobs[i] = multiprocessing.Process(
+                        target=lauch,
+                        args=(debug, "crawler%s.id" % i, "W%s:" % i)
+                    )
                     jobs[i].start()
-                    try: del stats[i]
-                    except KeyError: pass
+                    try:
+                        del stats[i]
+                    except KeyError:
+                        pass
 
             time.sleep(10)
     except (KeyboardInterrupt, EnvironmentError) as e:
@@ -392,7 +463,10 @@ def worker(debug):
 
 if __name__ == '__main__':
     debug = config.debug
-    for dir in [config.torrents_dir, config.torrents_done, config.torrents_archive, config.torrents_new, config.torrents_error]:
+    for dir in [
+        config.torrents_dir, config.torrents_done, config.torrents_archive,
+        config.torrents_new, config.torrents_error
+    ]:
         if not os.path.isdir(dir):
             os.mkdir(dir)
     for file in os.listdir(config.torrents_dir):

@@ -4,7 +4,7 @@
 debug = 0
 
 mongo = {
-  "db": "btdht-crawler",
+    "db": "btdht-crawler",
 }
 
 # crawler udp base port. port will be choosen (deterministically)
@@ -25,7 +25,7 @@ crawler_worker = 1
 crawler_instance = 3  # 8 instances
 
 # max resident memory in byte
-crawler_max_memory = 8 * 1024 * 1024 * 1024 # 8GB
+crawler_max_memory = 8 * 1024 * 1024 * 1024  # 8GB
 
 # where to write torrents retreived from dht or torcache
 torrents_dir = "torrents/"

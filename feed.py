@@ -6,7 +6,6 @@ import pymongo
 import hashlib
 import chardet
 import functools
-import json
 import argparse
 import progressbar
 import mimetypes
@@ -18,14 +17,21 @@ import config
 import categories
 from btdht_search.scraper import scrape_max
 
+
 class TorrentNoName(ValueError):
     pass
+
+
 class TorrentFileBadPathType(ValueError):
     pass
 
+
 def widget(what=""):
-    padding = 30
-    return [progressbar.ETA(), ' ', progressbar.Bar('='), ' ', progressbar.SimpleProgress(), ' ' if what else "", what]
+    return [
+        progressbar.ETA(), ' ', progressbar.Bar('='), ' ', progressbar.SimpleProgress(),
+        ' ' if what else "", what
+    ]
+
 
 @functools.total_ordering
 class TorrentFile(object):
@@ -51,7 +57,9 @@ class TorrentFile(object):
                         local_encoding = "utf-8"
                     file_path.append(path_component.decode(local_encoding, 'ignore'))
             else:
-                raise TorrentFileBadPathType("path element sould not be of type %s" % type(p).__name__)
+                raise TorrentFileBadPathType(
+                    "path element sould not be of type %s" % type(path_component).__name__
+                )
         self.path = os.path.join(*file_path)
         self.size = file[b'length']
 
@@ -100,7 +108,7 @@ class Torrent(object):
         if b'encoding' in torrent and torrent[b'encoding'].decode():
             encoding = torrent[b'encoding'].decode()
             if encoding in ['utf8 keys', 'mbcs']:
-               encoding = "utf-8"
+                encoding = "utf-8"
         else:
             if b'name' in torrent[b'info']:
                 try:
@@ -123,7 +131,7 @@ class Torrent(object):
 
         try:
             self.created = int(torrent.get(b'creation date', int(time.time())))
-        except ValueError as e:
+        except ValueError:
             self.created = int(time.time())
 
         if b'files' in torrent[b'info']:
@@ -144,16 +152,22 @@ class Torrent(object):
 
     def done_move(self):
         hex_hash = self.hash.encode("hex")
-        path_dir = os.path.join(config.torrents_done, hex_hash[0], hex_hash[1], hex_hash[2], hex_hash[3])
+        path_dir = os.path.join(
+            config.torrents_done,
+            hex_hash[0],
+            hex_hash[1],
+            hex_hash[2],
+            hex_hash[3]
+        )
         path = os.path.join(path_dir, "%s.torrent" % hex_hash)
         dir = config.torrents_done
         if not os.path.isdir(path_dir):
-            for i in range(4): # 0 1 2 3
+            for i in range(4):  # 0 1 2 3
                 dir = os.path.join(dir, hex_hash[i])
                 try:
                     os.mkdir(dir)
                 except OSError as error:
-                    if error.errno != 17: # File exists
+                    if error.errno != 17:  # File exists
                         raise
         try:
             os.rename(self.path, path)
@@ -161,8 +175,6 @@ class Torrent(object):
             print "path %s or %s errored" % (self.path, path)
             raise
         self.path = path
-        
-        
 
 
 class Manager(object):
@@ -178,7 +190,6 @@ class Manager(object):
     def add_stats(self, force=False):
         last_stats = self.db3.find().sort([('_id', -1)]).limit(1).next()
         if force or time.time() - last_stats['_id'] >= 1800:
-            hash_tracked = self.db1.find({"status":{"$in": [0, None]}}).count()
             torrent_indexed = self.db2.find().count()
             data = {"_id": int(time.time()), "torrent_indexed": torrent_indexed}
             for cat in categories.categories:
@@ -194,7 +205,10 @@ class Manager(object):
         if not files:
             return
         if self.progress:
-            pbar = progressbar.ProgressBar(widgets=widget("added new torrents"), maxval=len(files)).start()
+            pbar = progressbar.ProgressBar(
+                widgets=widget("added new torrents"),
+                maxval=len(files)
+            ).start()
         else:
             sys.stdout.write("Adding new torrents... ")
             sys.stdout.flush()
@@ -226,7 +240,6 @@ class Manager(object):
                 except pymongo.errors.PyMongoError:
                     pass
             print "OK"
-
 
     def _process_torrent(self, path):
         try:
@@ -282,9 +295,9 @@ class Manager(object):
     def _categorise(self, result, filter=True):
         cat = collections.defaultdict(int)
         if result.get('files') is not None:
-           files = result['files']
+            files = result['files']
         else:
-           files = [{'path': result['name'], 'size': result['size']}]
+            files = [{'path': result['name'], 'size': result['size']}]
         for file in files:
             if file['size'] > 0:
                 typ = categories.guess(file['path'])
@@ -295,27 +308,26 @@ class Manager(object):
                 else:
                     cat[typ] += 1
         cat_list = cat.items()
-        cat_list.sort(key=lambda x:-x[1])
+        cat_list.sort(key=lambda x: -x[1])
         if filter is False:
             return cat_list
         cat_list = [c[0] for c in cat_list] or ['other']
-        #if 'other' in cat_list:
-        #    cat_list.remove('other')
-        #    cat_list.append('other')
         max = cat[cat_list[0]]
         return [c for c in cat_list if cat[c] >= (max / 4.0)]
-        
-        
+
     def categorise(self, all=False):
         if all:
             results = self.db2.find({})
         else:
-             results = self.db2.find({'categories': {'$in': [None, []]}})
+            results = self.db2.find({'categories': {'$in': [None, []]}})
         maxval = results.count()
         if maxval == 0:
             return
         if self.progress:
-            pbar = progressbar.ProgressBar(widgets=widget("torrent categorised"), maxval=maxval).start()
+            pbar = progressbar.ProgressBar(
+                widgets=widget("torrent categorised"),
+                maxval=maxval
+            ).start()
         for result in results:
             cats = self._categorise(result)
             self.db2.update({'_id': result['_id']}, {'$set': {'categories': cats}})
@@ -324,9 +336,9 @@ class Manager(object):
                     pbar.update(pbar.currval + 1)
                 except:
                     pass
-        
+
         if self.progress:
-            pbar.finish()    
+            pbar.finish()
 
     def mimes_report(self):
         results = self.db2.find({}, {'files': True, 'name': True})
@@ -338,7 +350,7 @@ class Manager(object):
             if not result['files']:
                 result['files'] = [{'path': result['name']}]
             for file in result['files']:
-                    mime =  mimetypes.guess_type(file['path'], strict=False)[0]
+                    mime = mimetypes.guess_type(file['path'], strict=False)[0]
                     typ = None
                     if mime:
                         typ = categories.mime_to_category(mime)
@@ -356,9 +368,9 @@ class Manager(object):
         if self.progress:
             pbar.finish()
         mimes = mimes.items()
-        mimes.sort(key=lambda x:-x[1])
+        mimes.sort(key=lambda x: -x[1])
         not_known = not_known.items()
-        not_known.sort(key=lambda x:-x[1])
+        not_known.sort(key=lambda x: -x[1])
         with open('mime_types.txt', 'w') as mime_f, open('extensions.txt', 'w') as ext_f:
             for (value, nb) in mimes:
                 mime_f.write(value.encode("utf-8"))
@@ -373,25 +385,72 @@ class Manager(object):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--progress", "-P", help="display a progress bar for each action", action="store_true")
-    parser.add_argument("--add-new-torrents", "-A", help="process new torrents and add them to the database", action="store_true")
-    parser.add_argument("--record-stats", "-S", help="Add a stats record", action="store_true")
-    parser.add_argument("--reprocess-done-torrents", help="Try to readd to database already processed torrents", action="store_true")
-    parser.add_argument("--all", help="add new torrents, Delete old hash, and Add a stats record if needed. Kind of -A -D -S equivalent", action="store_true")
-    parser.add_argument("--loop", help="Loop actions every 5 minutes", action="store_true")
-    parser.add_argument("--mimes-report", help="Generate report on not classified files extensions and mime types (extensions.txt and mime_types.txt)", action="store_true")
-    parser.add_argument("--categorise", help="Compute torrents categories for new torrents", action="store_true")
-    parser.add_argument("--categorise-all", help="Compute torrents categories for all torrents", action="store_true")
-    parser.add_argument("--scrape", help="Scrape new torrents when called with --add-new-torrents", action="store_true")
+    parser.add_argument(
+        "--progress", "-P",
+        help="display a progress bar for each action",
+        action="store_true"
+    )
+    parser.add_argument(
+        "--add-new-torrents", "-A",
+        help="process new torrents and add them to the database",
+        action="store_true"
+    )
+    parser.add_argument(
+        "--record-stats", "-S",
+        help="Add a stats record",
+        action="store_true"
+    )
+    parser.add_argument(
+        "--reprocess-done-torrents",
+        help="Try to readd to database already processed torrents",
+        action="store_true"
+    )
+    parser.add_argument(
+        "--all",
+        help=(
+            "add new torrents, Delete old hash, and Add a stats record if needed. "
+            "Kind of -A -D -S equivalent"
+        ),
+        action="store_true")
+    parser.add_argument(
+        "--loop",
+        help="Loop actions every minutes",
+        action="store_true"
+    )
+    parser.add_argument(
+        "--mimes-report",
+        help=(
+            "Generate report on not classified files extensions and mime "
+            "types (extensions.txt and mime_types.txt)"
+        ),
+        action="store_true"
+    )
+    parser.add_argument(
+        "--categorise",
+        help="Compute torrents categories for new torrents",
+        action="store_true"
+    )
+    parser.add_argument(
+        "--categorise-all",
+        help="Compute torrents categories for all torrents",
+        action="store_true"
+    )
+    parser.add_argument(
+        "--scrape",
+        help="Scrape new torrents when called with --add-new-torrents",
+        action="store_true"
+    )
     args = parser.parse_args()
     manager = Manager(args.progress)
     if not args.loop:
         manager.process_args(args)
     else:
-        sleep_widget = [progressbar.Bar('>'), ' ', progressbar.ETA(), ' ', progressbar.ReverseBar('<')]
+        sleep_widget = [
+            progressbar.Bar('>'), ' ', progressbar.ETA(), ' ', progressbar.ReverseBar('<')
+        ]
         while True:
             try:
                 manager.process_args(args)
             except pymongo.errors.PyMongoError as error:
-                print "PyMongoError: %s" %error
+                print "PyMongoError: %s" % error
             manager.sleep(60)
