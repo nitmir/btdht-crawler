@@ -392,9 +392,12 @@ def worker(debug):
 
 if __name__ == '__main__':
     debug = config.debug
-    for dir in [config.torrents_dir, config.torrents_done, config.torrents_archive, config.torrents_new]:
+    for dir in [config.torrents_dir, config.torrents_done, config.torrents_archive, config.torrents_new, config.torrents_error]:
         if not os.path.isdir(dir):
             os.mkdir(dir)
+    for file in os.listdir(config.torrents_dir):
+        if file.endswith('.new'):
+            os.remove(os.path.join(config.torrents_dir, file))
     if config.crawler_worker > 1:
         worker(debug)
     else:

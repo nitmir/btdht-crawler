@@ -3,3 +3,5 @@ pymongo
 psutil
 chardet
 progressbar
+requests_futures
+pytz

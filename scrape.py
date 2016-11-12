@@ -37,6 +37,7 @@ tracker_scrape_url = {
     'coppersurfer': ("http://coppersurfer.tk/full_scrape_not_a_tracker.tar.gz", 3600),
     'sktorrent': ("http://tracker.sktorrent.net/full_scrape_not_a_tracker.tar.gz", 1800),
     'pirateparty': ("http://tracker.pirateparty.gr/full_scrape.tar.gz", 3600),
+    'internetwarriors': ("http://internetwarriors.net/full.tar.gz", 300),
 }
 
 class Scraper(object):

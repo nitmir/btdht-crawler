@@ -49,3 +49,19 @@ torrents_new = "torrents_new/"
 
 # directory use to store tracker full scrape files
 torrents_scrape = "torrents_scrape/"
+
+torrents_error = "torrents_errors/"
+
+scrape_trackers = [
+    "udp://tracker.leechers-paradise.org:6969/announce",
+    "udp://tracker.zer0day.to:1337/announce",
+    "udp://tracker.coppersurfer.tk:6969/announce",
+
+    "udp://tracker.opentrackr.org:1337/announce",
+
+    "udp://tracker.internetwarriors.net:1337/announce",
+    "udp://tracker.sktorrent.net:6969/announce",
+    "udp://tracker.pirateparty.gr:6969/announce",
+
+    "udp://tracker.desu.sh:6969",
+]
