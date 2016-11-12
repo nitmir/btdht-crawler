@@ -3,7 +3,9 @@ torrents/
 torrents_archives/
 torrents_done/
 torrents_scrape/
+torrents_errors/
 config.py
 *.id
 *.pid
 *.status
+*.txt
