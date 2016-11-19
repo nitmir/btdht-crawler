@@ -228,11 +228,11 @@ class Torrent(object):
 
         if re.match("^[0-9A-Fa-f]{40}$", query):
             search_query = {"$or": [
-                {"$text": {"$search": query, '$language': "none"}},
+                {"$text": {"$search": query, '$language': "english"}},
                 {"_id": Binary(query.decode("hex"))}
             ]}
         else:
-            search_query = {"$text": {"$search": query, '$language': "none"}}
+            search_query = {"$text": {"$search": query, '$language': "english"}}
         if category > 0:
             search_query = {"$and": [search_query, {'categories': const.categories[category-1]}]}
         results = db.find(search_query, {"score": {"$meta": "textScore"}, 'files': False})
