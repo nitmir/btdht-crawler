@@ -35,13 +35,6 @@ body {
     margin: 0 -12%;
 }
 
-@media (max-width: 1200px) {
-    .container{
-        max-width: 1070px;
-//        margin: 0;
-    }
-}
-
 @media screen and (max-width: 680px) {
     #app-name {
         margin: 0;
@@ -88,6 +81,19 @@ select.select-noarrow::-ms-expand {
     width: 40px;
 }
 
+@media screen and (max-width: 1200px) and (min-width: 992px){
+    #srch-term {
+        width: 165px;
+    }
+    #navbar-container {
+        width: 980px;
+    }
+}
+@media (max-width: 991px) and (min-width: 768px){
+    #srch-term {
+        width: 175px;
+    }
+}
 @media (max-width: 768px) {
     .full-width {
         min-width: 280px;
