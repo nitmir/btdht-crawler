@@ -365,7 +365,7 @@ def lauch(debug, id_file="crawler1.id", lprefix="", worker_alive=None):
             if stoped:
                 raise Exception("Stoped")
             liv.start()
-            time.sleep(1.4142135623730951 * 0.3)
+            time.sleep(1.4142135623730951 * 0.1)
         print "%sloading routing table" % lprefix
         dht_base.load(
             os.path.join(config.data_dir, "dht_%s.status" % dht_base.myid.value.encode("hex")),
@@ -438,7 +438,7 @@ def worker(debug):
                             stats[i] = (c[0], c[1], time.time(), 0)
                         # if no io since more than 2 min, there is a problem
                         elif time.time() - stats[i][2] > 120:
-                            print("crawler%s no activity since 30s, killing" % i)
+                            print("crawler%s no activity since 2min, killing" % i)
                             if stats[i][3] < 5:
                                 p.terminate()
                                 stats[i] = stats[i][0:3] + (stats[i][3] + 1, )
@@ -475,11 +475,14 @@ def worker(debug):
             jobs = [j for j in jobs if j.is_alive()]
             if not jobs:
                 break
+            time.sleep(0.1)
         if jobs:
             for i in range(10):
                 jobs = [j for j in jobs if j.terminate() or j.is_alive()]
                 if not jobs:
                     break
+                time.sleep(0.5)
+
 
 if __name__ == '__main__':
     debug = config.debug
