@@ -5,3 +5,4 @@ chardet
 progressbar
 requests_futures
 pytz
+netaddr

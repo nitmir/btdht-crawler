@@ -116,3 +116,7 @@ select.select-noarrow::-ms-expand {
     width: 1000px;
     height: 400px;
 }
+
+.ui-autocomplete {
+   z-index:2000;
+}

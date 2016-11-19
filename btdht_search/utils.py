@@ -23,6 +23,8 @@ import pymongo
 import time
 import json
 import hashlib
+import re
+import netaddr
 from six.moves import urllib
 from bson.binary import Binary
 from datetime import datetime
@@ -170,6 +172,23 @@ def normalize_name(name):
     name = name.replace('\n', '')
     name = name.replace('\r', '')
     return name
+
+
+def normalize_search_archive(query):
+    return " ".join(re.sub("[^\w]", " ",  query).split()).lower()
+
+def normalize_ip_archive(ip):
+    try:
+        ip = netaddr.IPAddress(ip)
+        if ip.version == 4:
+            return ip.format()
+        elif ip.version == 6:
+           net = netaddr.IPNetwork("%s/64" % ip)
+           return net.network.format()
+        else:
+            return ""
+    except netaddr.AddrFormatError:
+        return ""
 
 
 import models

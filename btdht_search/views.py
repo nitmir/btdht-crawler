@@ -14,6 +14,7 @@ import time
 import collections
 import hashlib
 
+import utils
 from .utils import context, getdb, format_date, scrape, render_json, normalize_name
 from .forms import SearchForm
 from .models import Torrent, UserPref
@@ -42,10 +43,19 @@ def index(request, page=1, query=None, order_by=const.ORDER_BY_SCORE, asc='1', c
     elif request.method == "POST":
         form = SearchForm(request.POST, initial={'query': query, 'category': category})
         if form.is_valid():
+            query = form.cleaned_data["query"]
+            getdb("torrents_search").update(
+                {
+                    'query': utils.normalize_search_archive(query),
+                    'ip': utils.normalize_ip_archive(request.META.get('REMOTE_ADDR'))
+                },
+                {'$set': {"date": time.time()}},
+                upsert=True
+            )
             return redirect(
                 "btdht_search:index_query",
                 page=1,
-                query=form.cleaned_data["query"],
+                query=query,
                 order_by=const.ORDER_BY_SCORE,
                 asc='1',
                 category=form.cleaned_data["category"]
@@ -74,6 +84,19 @@ def index(request, page=1, query=None, order_by=const.ORDER_BY_SCORE, asc='1', c
         context({'form': form, 'torrents': torrents, 'query': query, 'category': category})
     )
 
+def autocomplete(request):
+    query = utils.normalize_search_archive(request.GET.get("term", ""))
+    if not query:
+        return render_json([])
+    db = getdb("torrents_search")
+    results = db.aggregate([
+        {'$match': {'query': {'$gte': query, '$lt': query[:-1] + chr(ord(query[-1]) + 1)}}},
+        {'$group': {'_id': '$query', 'count': {'$sum': 1}}},
+        {'$match': {'count': {'$gte': 2}}},
+        {'$sort': {'count': -1}},
+        {'$limit': 8}
+    ])
+    return render_json([r['_id'] for r in results])
 
 @require_safe
 def api_search(request, page=1, query=None):

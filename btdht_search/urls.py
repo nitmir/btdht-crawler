@@ -63,6 +63,7 @@ urlpatterns = [
         token_auth(views.api_search),
         name='api_search_token'
     ),
+    url('^autocomplete$', require_login(views.autocomplete), name="autocomplete"),
     url('^recent$', require_login(views.recent), name='recent_index'),
     url('^recent.json$', require_login(views.api_recent), name='api_recent_index'),
     url('^recent/(?P<page>[0-9]+)$', require_login(views.recent), name='recent'),

@@ -37,5 +37,10 @@ $(document).ready(function () {
     $(".pagination").rPage();
     init_search_fav()
 });
-{% endif %}{% endblock %}
+{% endif %}
+$('#id_query').autocomplete({
+      source: "{% url "btdht_search:autocomplete" %}",
+      minLength: 1,
+});
+{% endblock %}
 
