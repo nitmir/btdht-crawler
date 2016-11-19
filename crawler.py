@@ -12,6 +12,7 @@ from btdht import DHT, ID, RoutingTable
 from btdht.utils import enumerate_ids
 
 import pymongo
+import netaddr
 from bson.binary import Binary
 
 import config
@@ -241,8 +242,14 @@ class Crawler(DHT):
                     for ipport in response.get("values", []):
                         (ip, port) = struct.unpack("!4sH", ipport)
                         ip = socket.inet_ntoa(ip)
-                        if (ip, port) not in self.hash_to_fetch_tried[info_hash]:
-                            self.hash_to_fetch_totry[info_hash].add((ip, port))
+                        try:
+                            if (ip, port) not in self.hash_to_fetch_tried[info_hash]:
+                                if not netaddr.IPAddress(ip).is_private():
+                                    self.hash_to_fetch_totry[info_hash].add((ip, port))
+                                else:
+                                    self.hash_to_fetch_tried[info_hash].add((ip, port))
+                        except netaddr.AddrFormatError:
+                            self.hash_to_fetch_tried[info_hash].add((ip, port))
 
     def on_get_peers_query(self, query):
         info_hash = query.get("info_hash")
