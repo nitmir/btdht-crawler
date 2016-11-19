@@ -149,7 +149,7 @@ class Crawler(DHT):
                             {"$set": {'status': 1}},
                             upsert=True
                         )
-                        self.debug(1, "%s downloaded" % hash.encode("hex"))
+                        self.debug(-2, "%s downloaded" % hash.encode("hex"))
                     self.root.client.meta_data[hash] = True
                     self.root.client.clean_hash(hash)
                     self.root.hash_to_ignore.add(hash)
@@ -193,7 +193,7 @@ class Crawler(DHT):
                                 del self.hash_to_fetch_totry[hash]
                             except:
                                 pass
-                            self.debug(1, "%s failed" % hash.encode("hex"))
+                            self.debug(-1, "%s failed" % hash.encode("hex"))
                             del failed_count[hash]
                             del self.root.client.meta_data[hash]
             if not processed:
