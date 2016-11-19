@@ -415,7 +415,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--loop",
         help="Loop actions every minutes",
-        action="store_true"
+        type=int
     )
     parser.add_argument(
         "--mimes-report",
@@ -442,7 +442,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     manager = Manager(args.progress)
-    if not args.loop:
+    if args.loop is None:
         manager.process_args(args)
     else:
         sleep_widget = [
@@ -453,4 +453,4 @@ if __name__ == "__main__":
                 manager.process_args(args)
             except pymongo.errors.PyMongoError as error:
                 print "PyMongoError: %s" % error
-            manager.sleep(60)
+            manager.sleep(args.loop)
