@@ -104,12 +104,15 @@ def scrape_udp(parsed_trackers, hashes, timeout=1):
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     for (tracker, parsed_tracker) in parsed_trackers:
-        conn = (socket.gethostbyname(parsed_tracker.hostname), parsed_tracker.port)
+        try:
+            conn = (socket.gethostbyname(parsed_tracker.hostname), parsed_tracker.port)
 
-        # Get connection ID
-        req, transaction_id = udp_create_connection_request(transaction_ids)
-        sock.sendto(req, conn)
-        transaction_ids[transaction_id] = (0, time.time(), tracker, 0)
+            # Get connection ID
+            req, transaction_id = udp_create_connection_request(transaction_ids)
+            sock.sendto(req, conn)
+            transaction_ids[transaction_id] = (0, time.time(), tracker, 0)
+        except socket.error:
+            pass
 
     while len(transaction_ids) > 0:
         (rlist, _, _) = select.select([sock], [], [], timeout + 0.5)
