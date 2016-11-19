@@ -67,3 +67,10 @@ scrape_trackers = [
 
     "udp://tracker.desu.sh:6969",
 ]
+
+data_dir = "data/"
+
+ignored_ip = {"188.165.207.160"}
+
+# if None, all private ip networks are ignored
+ignored_net = None

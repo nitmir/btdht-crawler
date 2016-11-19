@@ -338,7 +338,9 @@ def lauch(debug, id_file="crawler1.id", lprefix="", worker_alive=None):
         debuglvl=debug,
         prefix="%s%02d:" % (lprefix, prefix),
         master=True,
-        routing_table=routing_table
+        routing_table=routing_table,
+        ignored_ip=config.ignored_ip,
+        ignored_net=config.ignored_net
     )
     liveness = [routing_table, dht_base]
     for id in enumerate_ids(config.crawler_instance, id_base):
@@ -351,7 +353,9 @@ def lauch(debug, id_file="crawler1.id", lprefix="", worker_alive=None):
                 id=ID(id),
                 routing_table=routing_table,
                 debuglvl=debug,
-                prefix="%s%02d:" % (lprefix, prefix)
+                prefix="%s%02d:" % (lprefix, prefix),
+                ignored_ip=config.ignored_ip,
+                ignored_net=config.ignored_net
             )
         )
 
