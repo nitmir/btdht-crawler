@@ -1,0 +1,5 @@
+{% load btdht_search %}User-Agent: *
+Allow: /
+
+Sitemap: {% url "btdht_search:sitemap_index" as sitemap %}{{sitemap|absolute_url:request}}
+
