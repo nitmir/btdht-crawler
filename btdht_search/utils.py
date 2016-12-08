@@ -121,7 +121,7 @@ def scrape(hashs, refresh=False):
     if hashs_to_scrape:
         bad_tracker = scrape.bad_tracker
         for tracker in bad_tracker.keys():
-            if time.time() - bad_tracker[tracker] > 1800:
+            if time.time() - bad_tracker[tracker] > 600:
                 del bad_tracker[tracker]
         good_trackers = [
             tracker for tracker in settings.BTDHT_TRACKERS
@@ -130,7 +130,7 @@ def scrape(hashs, refresh=False):
         (result_trackers, scrape_result) = scrape_max(
             good_trackers,
             hashs_to_scrape,
-            udp_timeout=1.5
+            udp_timeout=2.5
         )
         for tracker in settings.BTDHT_TRACKERS:
             if (

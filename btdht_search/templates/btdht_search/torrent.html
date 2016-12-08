@@ -31,6 +31,7 @@ $(document).ready(function(){
 {% block content2 %}
 <br/>
 <h1>Torrent infos</h1>
+<div class="table-responsive" style="border: none">
 <table class="table">
 <tr><th>Name</th><td>{{torrent.name}}</td></tr>
 <tr><th>Files</th><td>{% if torrent.files %}<a href="#torrent_files">{{torrent.file_nb}}</a>{% else %}{{torrent.file_nb}}{% endif %}</td></tr>
@@ -41,8 +42,9 @@ $(document).ready(function(){
 <tr><th>Uploaded</th><td>{{torrent.created_pp}}{% if request.COOKIES.timezone is None %} UTC{% endif %}</td></tr>
 <tr><th>Info Hash</th><td>{{torrent.hex_hash.upper}}</td></tr>
 </table>
+</div>
 <h2>Torrent status</h2>
-<p class="pull-left">Last scrape at {{torrent.last_scrape|date_pp}}.</p>
+<p class="pull-left">Last scrape at {{torrent.last_scrape_pp}}.</p>
 <form method="post" class="pull-left">
 {% csrf_token %}
 <input type="hidden" name="scrape" value="1"/>

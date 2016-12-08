@@ -135,16 +135,21 @@ def scrape_udp(parsed_trackers, hashes, timeout=1):
                             udp_parse_scrape_response(buf, transaction_id, hashes)
                         )
                         hashes_to_scrape = hashes[hash_id * 74: (hash_id+1) * 74]
+                    elif action == 3:
+                        print "%s error: %s" % (tracker, udp_parse_error(buf, transaction_id))
                     else:
-                        print "Get other action %s" % status
+                        print "Get other action != status = 2: %s == %s" % (action, status)
                     if hashes_to_scrape:
                         req, transaction_id = udp_create_scrape_request(
                             transaction_ids,
                             connection_ids[tracker],
                             hashes
                         )
-                        sock.sendto(req, froms)
-                        transaction_ids[transaction_id] = (2, time.time(), tracker, hash_id+1)
+                        try:
+                            sock.sendto(req, froms)
+                            transaction_ids[transaction_id] = (2, time.time(), tracker, hash_id+1)
+                        except socket.error as error:
+                            pass
         else:
             for transaction_id, (_, start_time, _, _) in transaction_ids.items():
                 if time.time() - start_time > (timeout + 0.5):
@@ -198,6 +203,22 @@ def udp_get_status(buf):
     (action, transaction_id) = struct.unpack_from("!ii", buf)
     return (action, transaction_id)
 
+
+def udp_parse_error(buf, sent_transaction_id):
+    if len(buf) < 8:
+        raise RuntimeError("Response too short for error msg: %r %s" % (buf, len(buf)))
+    action, res_transaction_id = struct.unpack_from("!ii", buf)
+    if res_transaction_id != sent_transaction_id:
+        raise RuntimeError(
+            "Transaction ID doesnt match in connection response! Expected %s, got %s" % (
+                sent_transaction_id, res_transaction_id
+            )
+        )
+    if action == 3:
+        msg = buf[8:]
+        return msg
+    else:
+        raise  RuntimeError("Not and error response")
 
 def udp_parse_connection_response(buf, sent_transaction_id):
     if len(buf) < 16:

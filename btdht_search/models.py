@@ -348,6 +348,13 @@ class Torrent(object):
         return format_date(self.created, timezone=self._timezone)
 
     @property
+    def last_scrape_pp(self):
+        if self.last_scrape is not None and self.last_scrape > 0:
+            return format_date(self.last_scrape, timezone=self._timezone)
+        else:
+            "never"
+
+    @property
     def created_delta(self):
         return timedelta(seconds=int(time.time()) - self.created)
 

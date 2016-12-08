@@ -2,13 +2,21 @@
 {% load i18n %}
 {% load staticfiles %}
 {% load btdht_search %}
+{% load humanize %}
 {% block title %}BTDHT | Statistics{% endblock %}
 {% block content2 %}
 <h1>Statistics</h1>
-<h2>Torrent chart</h2>
+<h2>Number of torrents</h2>
+There are currently {{nb_torrents|intword}} ({{nb_torrents|intcomma}}) torrents in the database
 <div class="table-responsive" style="border: none">
 <table class="table"><tr><td style="border: none">
 <canvas id="torrent_chart" width="500" height="400"></canvas>
+</td></tr></table></div>
+<h2>Torrent upload rate</h2>
+{{torrent_rate_av}} torrents uploaded each minutes on average the last 24 hours
+<div class="table-responsive" style="border: none">
+<table class="table"><tr><td style="border: none">
+<canvas id="torrent_add_rate" width="500" height="400"></canvas>
 </td></tr></table></div>
 <h2>Tracker scrape</h2>
 <p>
@@ -41,6 +49,7 @@ The result from the tracker with the maximum leecher/seeders/complete is display
 
 {% block javascript_inline %}
 var torrent_chart_canvas = $("#torrent_chart");
+var torrent_add_rate_canvas = $("#torrent_add_rate");
 var doit;
 var current_width = 0;
 //$( window ).resize(function(){clearTimeout(doit);doit = setTimeout(resize_torrent_chart, 500);});
@@ -49,19 +58,70 @@ function resize_torrent_chart(delay){
     var height = $(window).width();
     if(height <= 992 && current_width != 700){
         torrent_chart_canvas.attr("width", 700);
+        torrent_add_rate_canvas.attr("width", 700);
         current_width = 700;
-        setTimeout(draw_torrent_chart, delay);
+        draw(delay);
     } else if(height <= 1200 && height > 992 && current_width != 900){
         torrent_chart_canvas.attr("width", 900);
+        torrent_add_rate_canvas.attr("width", 900);
         current_width = 900;
-        setTimeout(draw_torrent_chart, delay);
+        draw(delay);
     } else if(height > 1200 && current_width != 1100){
         torrent_chart_canvas.attr("width", 1100);
+        torrent_add_rate_canvas.attr("width", 1100);
         current_width = 1100;
-        setTimeout(draw_torrent_chart, delay);
+        draw(delay);
     }
 }
-function draw_torrent_chart(){
+function draw(delay){
+    setTimeout(draw_torrent_chart, delay);
+    setTimeout(draw_torrent_add_rate, delay);
+}
+function draw_torrent_add_rate(){
+    var ctx = document.getElementById("torrent_add_rate");
+    var myChart = new Chart(ctx,{% nospace %}{
+        type: 'line',
+        data: {
+            datasets: [
+                {
+                    label: '# uploaded torrents by minutes',
+                    data: {{torrent_rate|safe}},
+                    fill: false,
+                    backgroundColor: "rgba(00, 188, 212, 0.5)",
+                    borderColor: "rgba(00, 188, 212, 1)",
+                    pointBorderColor: "transparent",
+                    pointBackgroundColor: "transparent",
+                    pointHoverBackgroundColor: "rgba(00, 188, 212, 1)",
+                    pointHoverBorderColor: "rgba(00, 188, 212, 1)",
+                }
+            ]
+        },
+        options: {
+            animation: false,
+            maintainAspectRatio: false,
+            responsive: false,
+            scales: {
+                yAxes: [{
+                    ticks: {
+                        beginAtZero:true
+                    }
+                }],
+                xAxes: [{
+                    type: 'time',
+                    time: {
+                        parser: 'YYYY-MM-DD HH:mm:ss Z',
+                        displayFormats: {
+                            minute: 'HH:mm',
+                            hour: 'MMM D, H\\h',
+                        }
+                    }
+                }]
+            }
+        }
+    });
+}
+
+{% endnospace %}function draw_torrent_chart(){
     var ctx = document.getElementById("torrent_chart");
     var myChart = new Chart(ctx,{% nospace %}{
         type: 'line',

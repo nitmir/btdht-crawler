@@ -13,6 +13,7 @@ import json
 import time
 import collections
 import hashlib
+from datetime import datetime
 
 import utils
 from .utils import context, getdb, format_date, scrape, render_json, normalize_name
@@ -202,21 +203,37 @@ def api_recent(request, page=1):
 def stats(request):
     db = getdb("torrents_stats")
     timezone = request.COOKIES.get('timezone', 'UTC')
-    results = db.find({'_id': {'$gte': time.time() - 30 * 24 * 3600}}).sort([('_id', 1)])
+    results = db.find({'_id': {'$gte': time.mktime(datetime.fromtimestamp(time.time() - 30 * 24 * 3600).date().timetuple())}}).sort([('_id', 1)])
     torrent_indexed = []
     categories = collections.defaultdict(list)
     times = []
+    torrent_rate = []
+    torrent_rate_last = None
+    torrent_rate_av_list = []
     bad_tracker = scrape.bad_tracker.keys()
     bad_tracker.extend(settings.BTDHT_TRACKERS_NO_SCRAPE)
     good_tracker = [tracker for tracker in settings.BTDHT_TRACKERS if tracker not in bad_tracker]
+    last_week = time.time() - 2.5 * 3600 * 24
+    last_day = time.time() - 3600 * 24
+    i = 0
     for result in results:
+        i += 1
+        if result['_id'] < last_week:
+            if i % 6 != 1:
+                continue
         x = format_date(result['_id'], '%Y-%m-%d %H:%M:%S %z', timezone=timezone)
         times.append(x)
         torrent_indexed.append({'x': x, 'y': result["torrent_indexed"]})
+        if torrent_rate_last and result['_id'] >= last_week:
+            torrent_rate.append({'x': x, 'y': round((int(result["torrent_indexed"]) - torrent_rate_last["y"]) / (float(result['_id']) - torrent_rate_last['x']) * 60, 2)})
+            if result['_id'] >= last_day:
+                torrent_rate_av_list.append(torrent_rate[-1]['y'])
+        torrent_rate_last = {'x': float(result['_id']), 'y': int(result["torrent_indexed"])}
         for cat in const.categories:
             y = result.get(cat, 0)
             if y > 0:
                 categories[cat].append({'x': x, 'y': y})
+    torrent_rate_av = round(sum(torrent_rate_av_list, 0) / len(torrent_rate_av_list), 2)
     colors = [(int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16)) for c in const.categories_colors]
     json_cat = []
     for i, cat in enumerate(const.categories):
@@ -228,6 +245,9 @@ def stats(request):
             'torrent_indexed': json.dumps(torrent_indexed),
             'categories': json_cat,
             'times': json.dumps(times),
+            'torrent_rate': json.dumps(torrent_rate),
+            'nb_torrents': result["torrent_indexed"],
+            'torrent_rate_av': torrent_rate_av,
             'good_tracker': good_tracker,
             'bad_tracker': bad_tracker
         })
