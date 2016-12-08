@@ -8,7 +8,7 @@ import math
 import collections
 from threading import Thread
 
-from btdht.utils import bencode, bdecode, _bdecode, BcodeError, ID
+from btdht.utils import bencode, bdecode, bdecode_rest, BcodeError, ID
 
 
 class MetaDataDownloaded(Exception):
@@ -69,7 +69,7 @@ class Client(object):
 
     def start(self):
         self.stoped = False
-        self.id = str(ID())
+        self.id = ID().value
         t = Thread(target=self._recv_loop)
         t.setName("Client:recv_loop")
         t.daemon = True
@@ -306,7 +306,7 @@ class Client(object):
                 self.interested(s)
         elif msg_typ == self._am_metadata:
             hash = self._socket_hash[s]
-            msg, data = _bdecode(msg)
+            msg, data = bdecode_rest(msg)
             if msg['msg_type'] == 0:
                 if self._metadata_pieces[hash] and msg['piece'] < self._metadata_pieces_nb[hash]:
                     self.metadata_data(s, msg['piece'])

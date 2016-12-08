@@ -9,7 +9,7 @@ import collections
 import multiprocessing
 from threading import Thread
 from btdht import DHT, ID, RoutingTable
-from btdht.utils import enumerate_ids
+from btdht.utils import enumerate_ids, Scheduler
 
 import pymongo
 import netaddr
@@ -19,7 +19,8 @@ import config
 import resource
 import torrent
 
-
+class SharedObject(object):
+	pass
 class HashToIgnore(object):
     hash_to_ignore = set()
     hash_not_to_ignore = collections.defaultdict(int)
@@ -72,29 +73,35 @@ class HashToIgnore(object):
 
 class Crawler(DHT):
     def __init__(self, *args, **kwargs):
+        self.master = kwargs.get("master", False)
+        if self.master:
+            del kwargs["master"]
+        self.share = kwargs["share"]
+        del kwargs["share"]
         super(Crawler, self).__init__(*args, **kwargs)
         if self.master:
-            self.root.client = torrent.Client(debug=(self.debuglvl > 0))
+            self.share.client = torrent.Client(debug=(self.debuglvl > 0))
         self.register_message("get_peers")
         self.register_message("announce_peer")
 
     def stop(self):
         if self.master:
-            self.root.client.stoped = True
+            self.share.client.stoped = True
         super(Crawler, self).stop()
 
     def start(self):
         # doing some initialisation
         if self.master:
-            self.root.db = pymongo.MongoClient()[config.mongo["db"]]["torrents"]
-            self.root.hash_to_ignore = HashToIgnore(self.root.db)
-            self.root.bad_info_hash = {}
-            self.root.good_info_hash = {}
+            self.share.db = pymongo.MongoClient()[config.mongo["db"]]["torrents"]
+            self.share.hash_to_ignore = HashToIgnore(self.share.db)
+            self.share.bad_info_hash = {}
+            self.share.good_info_hash = {}
         self.hash_to_fetch = collections.OrderedDict()
         self.hash_to_fetch_tried = collections.defaultdict(set)
         self.hash_to_fetch_totry = collections.defaultdict(set)
 
         # calling parent method
+        #super(Crawler, self).start(start_routing_table=False)
         super(Crawler, self).start()
 
         # starting threads
@@ -107,9 +114,9 @@ class Crawler(DHT):
             self.threads.append(t)
         if self.master:
             # addings threads to parent threads list
-            self.root.client.start()
-            self._threads.extend(self.root.client.threads)
-            self.threads.extend(self.root.client.threads)
+            self.share.client.start()
+            self._threads.extend(self.share.client.threads)
+            self.threads.extend(self.share.client.threads)
 
     def _client_loop(self):
         failed_count = collections.defaultdict(int)
@@ -120,14 +127,14 @@ class Crawler(DHT):
                 if self.stoped:
                     return
                 if (
-                    hash in self.root.client.meta_data or
+                    hash in self.share.client.meta_data or
                     os.path.isfile(
                         os.path.join(config.torrents_dir, "%s.torrent" % hash.encode("hex"))
                     )
                 ):
                     if (
-                        hash in self.root.client.meta_data and
-                        self.root.client.meta_data[hash] is not True
+                        hash in self.share.client.meta_data and
+                        self.share.client.meta_data[hash] is not True
                     ):
                         with open(
                             os.path.join(
@@ -136,7 +143,7 @@ class Crawler(DHT):
                             ),
                             'wb'
                         ) as f:
-                            f.write("d4:info%se" % self.root.client.meta_data[hash])
+                            f.write("d4:info%se" % self.share.client.meta_data[hash])
                         os.rename(
                             os.path.join(
                                 config.torrents_dir,
@@ -144,15 +151,15 @@ class Crawler(DHT):
                             ),
                             os.path.join(config.torrents_dir, "%s.torrent" % hash.encode("hex"))
                         )
-                        self.root.db.update(
+                        self.share.db.update(
                             {'_id': Binary(hash)},
                             {"$set": {'status': 1}},
                             upsert=True
                         )
                         self.debug(-2, "%s downloaded" % hash.encode("hex"))
-                    self.root.client.meta_data[hash] = True
-                    self.root.client.clean_hash(hash)
-                    self.root.hash_to_ignore.add(hash)
+                    self.share.client.meta_data[hash] = True
+                    self.share.client.clean_hash(hash)
+                    self.share.hash_to_ignore.add(hash)
                     try:
                         del self.hash_to_fetch[hash]
                     except:
@@ -165,22 +172,22 @@ class Crawler(DHT):
                         del self.hash_to_fetch_totry[hash]
                     except:
                         pass
-                    del self.root.client.meta_data[hash]
+                    del self.share.client.meta_data[hash]
                 else:
                     self.get_peers(hash, block=False, limit=1000)
                     if time.time() - last_fail[hash] > 10:
                         try:
                             (ip, port) = self.hash_to_fetch_totry[hash].pop()
                             self.hash_to_fetch_tried[hash].add((ip, port))
-                            self.root.client.add(ip, port, hash)
+                            self.share.client.add(ip, port, hash)
                             processed = True
                         except KeyError:
                             last_fail[hash] = time.time()
                             failed_count[hash] += 1
                         if failed_count[hash] >= 18:
-                            self.root.client.meta_data[hash] = True
-                            self.root.client.clean_hash(hash)
-                            self.root.good_info_hash[hash] = time.time()
+                            self.share.client.meta_data[hash] = True
+                            self.share.client.clean_hash(hash)
+                            self.share.good_info_hash[hash] = time.time()
                             try:
                                 del self.hash_to_fetch[hash]
                             except:
@@ -195,7 +202,7 @@ class Crawler(DHT):
                                 pass
                             self.debug(-1, "%s failed" % hash.encode("hex"))
                             del failed_count[hash]
-                            del self.root.client.meta_data[hash]
+                            del self.share.client.meta_data[hash]
             if not processed:
                 self.sleep(10)
 
@@ -206,24 +213,24 @@ class Crawler(DHT):
         if self.master:
             now = time.time()
             # cleanng old bad info_hash
-            for hash in self.root.bad_info_hash.keys():
+            for hash in self.share.bad_info_hash.keys():
                 try:
-                    if now - self.root.bad_info_hash[hash] > 30 * 60:
-                        del self.root.bad_info_hash[hash]
+                    if now - self.share.bad_info_hash[hash] > 30 * 60:
+                        del self.share.bad_info_hash[hash]
                 except KeyError:
                     pass
 
-            for hash in self.root.good_info_hash.keys():
+            for hash in self.share.good_info_hash.keys():
                 try:
-                    if now - self.root.good_info_hash[hash] > 30 * 60:
-                        del self.root.good_info_hash[hash]
+                    if now - self.share.good_info_hash[hash] > 30 * 60:
+                        del self.share.good_info_hash[hash]
                 except KeyError:
                     pass
 
-            self.save(
-                os.path.join(config.data_dir, "dht_%s.status" % self.myid.value.encode("hex")),
-                max_node=4000
-            )
+        #self.save(
+        #    os.path.join(config.data_dir, "dht_%s.status" % self.myid.value.encode("hex")),
+        #    max_node=100
+        #)
 
     def on_get_peers_response(self, query, response):
         if response.get("values"):
@@ -231,11 +238,11 @@ class Crawler(DHT):
             if info_hash:
                 if (
                     info_hash not in self.hash_to_fetch and
-                    info_hash not in self.root.hash_to_ignore
+                    info_hash not in self.share.hash_to_ignore
                 ):
                     self.hash_to_fetch[info_hash] = time.time()
                     try:
-                        del self.root.bad_info_hash[info_hash]
+                        del self.share.bad_info_hash[info_hash]
                     except KeyError:
                         pass
                 if info_hash in self.hash_to_fetch:
@@ -255,9 +262,9 @@ class Crawler(DHT):
         info_hash = query.get("info_hash")
         if info_hash:
             if (
-                info_hash not in self.root.bad_info_hash and
-                info_hash not in self.root.good_info_hash and
-                info_hash not in self.root.hash_to_ignore and
+                info_hash not in self.share.bad_info_hash and
+                info_hash not in self.share.good_info_hash and
+                info_hash not in self.share.hash_to_ignore and
                 info_hash not in self.hash_to_fetch
             ):
                 self.determine_info_hash(info_hash)
@@ -265,17 +272,17 @@ class Crawler(DHT):
     def on_announce_peer_query(self, query):
         info_hash = query.get("info_hash")
         if info_hash:
-            if info_hash not in self.root.hash_to_ignore:
+            if info_hash not in self.share.hash_to_ignore:
                 self.hash_to_fetch[info_hash] = time.time()
-            self.root.good_info_hash[info_hash] = time.time()
+            self.share.good_info_hash[info_hash] = time.time()
             try:
-                del self.root.bad_info_hash[info_hash]
+                del self.share.bad_info_hash[info_hash]
             except KeyError:
                 pass
 
     def get_hash_to_ignore(self, errornb=0):
         try:
-            results = self.root.db.find(
+            results = self.share.db.find(
                 {"status": {"$nin": [0, None]}},
                 {"_id": True, "status": False}
             )
@@ -292,9 +299,9 @@ class Crawler(DHT):
     def determine_info_hash(self, hash):
         def callback(peers):
             if peers:
-                self.root.good_info_hash[hash] = time.time()
+                self.share.good_info_hash[hash] = time.time()
             else:
-                self.root.bad_info_hash[hash] = time.time()
+                self.share.bad_info_hash[hash] = time.time()
         self.get_peers(hash, delay=15, block=False, callback=callback, limit=1000)
 
 
@@ -331,18 +338,22 @@ def lauch(debug, id_file="crawler1.id", lprefix="", worker_alive=None):
 
     port_base = config.crawler_base_port
     prefix = 1
-    routing_table = RoutingTable(debuglvl=debug)
+    scheduler = Scheduler()
+#    routing_table = RoutingTable(debuglvl=debug, scheduler=scheduler)
+    share = SharedObject()
     dht_base = Crawler(
         bind_port=port_base + ord(id_base[0]),
         id=id_base,
         debuglvl=debug,
         prefix="%s%02d:" % (lprefix, prefix),
         master=True,
-        routing_table=routing_table,
+#        routing_table=routing_table,
         ignored_ip=config.ignored_ip,
-        ignored_net=config.ignored_net
+        ignored_net=config.ignored_net,
+        scheduler=scheduler,
+        share=share
     )
-    liveness = [routing_table, dht_base]
+    liveness = [dht_base]
     for id in enumerate_ids(config.crawler_instance, id_base):
         if id == id_base:
             continue
@@ -351,13 +362,16 @@ def lauch(debug, id_file="crawler1.id", lprefix="", worker_alive=None):
             Crawler(
                 bind_port=port_base + ord(id[0]),
                 id=ID(id),
-                routing_table=routing_table,
+#                routing_table=routing_table,
                 debuglvl=debug,
                 prefix="%s%02d:" % (lprefix, prefix),
                 ignored_ip=config.ignored_ip,
-                ignored_net=config.ignored_net
+                ignored_net=config.ignored_net,
+                scheduler=scheduler,
+                share=share
             )
         )
+#    liveness.append(routing_table)
 
     stoped = False
     try:
@@ -367,10 +381,12 @@ def lauch(debug, id_file="crawler1.id", lprefix="", worker_alive=None):
             liv.start()
             time.sleep(1.4142135623730951 * 0.1)
         print "%sloading routing table" % lprefix
-        dht_base.load(
-            os.path.join(config.data_dir, "dht_%s.status" % dht_base.myid.value.encode("hex")),
-            max_node=4000
-        )
+        #dht_base.load(
+        #for dht in liveness:
+        #    dht.load(
+        #        os.path.join(config.data_dir, "dht_%s.status" % dht_base.myid.value.encode("hex")),
+        #        max_node=100
+        #    )
         print "%srouting table loaded" % lprefix
         while True:
             for liv in liveness:
@@ -388,10 +404,11 @@ def lauch(debug, id_file="crawler1.id", lprefix="", worker_alive=None):
     except (KeyboardInterrupt, Exception) as e:
         print("%r" % e)
         stop(liveness)
-        dht_base.save(
-            os.path.join(config.data_dir, "dht_%s.status" % dht_base.myid.value.encode("hex")),
-            max_node=4000
-        )
+        #for dht in liveness:
+            #dht.save(
+            #    os.path.join(config.data_dir, "dht_%s.status" % dht_base.myid.value.encode("hex")),
+            #    max_node=4000
+            #)
         print("exit")
 
 
