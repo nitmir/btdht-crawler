@@ -49,6 +49,8 @@ class Client(object):
     _peers_socket = {}  # (ip, port, hash) -> socket
     _fd_to_socket = {}  # int -> socket
 
+    _callbacks = []
+
     meta_data = {}  # hash -> bytes
 
     stoped = True
@@ -57,6 +59,46 @@ class Client(object):
     def __init__(self, debug=False):
         self.debug = debug
         self.poll = select.poll()
+
+        # initialize instance attributes
+        self._am_choking = {}
+        self._am_choking = {}  # socket -> bool
+        self._am_interested = {}  # socket -> bool
+        self._peer_choking = {}  # socket -> bool
+        self._peer_interested = {}  # socket -> bool
+
+        self._am_metadata = 1
+        self._peer_extended = {}  # socket -> bool
+        self._peer_metadata = {}  # socket -> int
+
+        self._metadata_size = {}  # hash -> int
+        self._metadata_size_qorum = {}  # hash -> size -> nb
+        self._metadata_pieces = {}  # hash -> list/array
+        self._metadata_pieces_received = {}  # hash -> int
+        self._metadata_pieces_nb = {}  # hash -> int
+
+        self._socket_hash = {}  # socket -> hash
+        self._socket_toread = {}  # socket -> str
+        self._socket_handshake = {}  # socket -> bool
+        self._socket_ipport = {}  # socket -> (ip, port)
+        self._hash_socket = collections.defaultdict(set)  # hash -> socket set
+        self._peers_socket = {}  # (ip, port, hash) -> socket
+        self._fd_to_socket = {}  # int -> socket
+
+        self._callbacks = []
+
+        self.meta_data = {}  # hash -> bytes
+
+        self.stoped = True
+        self.threads = []
+
+    def register_callback(self, func):
+        """
+            register a callback to be called upon hash completion
+            args are :class:`Client` instance, the hash
+            the metadata are available in :attr:`meta_data`
+        """
+        self._callbacks.append(func)
 
     def stop(self):
         self.stoped = True
@@ -327,6 +369,8 @@ class Client(object):
                                 self.clean_hash(hash)
                                 if self.debug:
                                     print "metadata complete"
+                                for func in self._callbacks:
+                                    func(self, hash)
                             else:
                                 self.init_hash(hash)
                                 if self.debug:
