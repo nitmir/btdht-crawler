@@ -24,5 +24,25 @@ The project name is an acronym for Bittorrent Distributed Hash Table Search.
 BTDHT Search is not a tracker and doesn't store any content and only collects
 torrent metadata (such as file names and file sizes) and a magnet link (torrent identifier).
 </p>
+
+<p>
+BTDHT Search is fully automated and no one but the automated program crawling the DHT is adding torrents metadata to the database.
+</p>
+
+{% if settings.BTDHT_CONTACT_MAILHIDE_URL or settings.BTDHT_CONTACT_EMAIL %}
+<p>
+If you have any question, you can contact the site webmaster by mail
+{% if settings.BTDHT_CONTACT_MAILHIDE_URL %}by clicking
+<a
+  href="{{settings.BTDHT_CONTACT_MAILHIDE_URL.0|safe}}"
+  onclick="window.open(
+    '{{settings.BTDHT_CONTACT_MAILHIDE_URL.1|safe}}',
+    '',
+    'toolbar=0,scrollbars=0,location=0,statusbar=0,menubar=0,resizable=0,width=500,height=300'
+  ); return false;"
+  title="Reveal this e-mail address">here</a>.
+{% else %}at the address <a href="mailto:{{settings.BTDHT_CONTACT_EMAIL}}">{{settings.BTDHT_CONTACT_EMAIL}}</a>{% endif %}
+<p>
+{% endif %}
 {% endblock %}
 
