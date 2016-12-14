@@ -6,3 +6,4 @@ progressbar
 requests_futures
 pytz
 netaddr
+geoip2

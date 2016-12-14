@@ -17,6 +17,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse
 from django.contrib.auth import login
+from django.contrib.gis.geoip2 import GeoIP2
 
 import os
 import pymongo
@@ -29,11 +30,13 @@ from six.moves import urllib
 from bson.binary import Binary
 from datetime import datetime
 from functools import wraps
+from geoip2.errors import AddressNotFoundError
 import pytz
 
 from .scraper import scrape_max
 import const
 
+geoip2 = GeoIP2()
 
 def token_auth(view):
     @wraps(view)
@@ -50,8 +53,7 @@ def token_auth(view):
 def random_token():
     return hashlib.md5(os.urandom(16)).hexdigest()
 
-
-def context(params):
+def context(request, params):
     """
         Function that add somes variable to the context before template rendering
 
@@ -63,7 +65,10 @@ def context(params):
     params["settings"] = settings
     params["message_levels"] = DEFAULT_MESSAGE_LEVELS
     params["const"] = const
-
+    try:
+        params["country_code"] = geoip2.country_code(request.META['REMOTE_ADDR'])
+    except (KeyError, AddressNotFoundError):
+        params["country_code"] = None
     return params
 
 

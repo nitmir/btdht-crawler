@@ -2,7 +2,7 @@
 {% load i18n %}
 {% load btdht_search %}
 
-{% block title %}BTDHT | recent torrents{% if torrents.page > 1 %} - {{torrents.page}}{% endif %}{% endblock %}
+{% block title %}BTDHT | recent torrents{% if torrents.page > 1 %}, page {{torrents.page}}{% endif %}{% endblock %}
 
 {% block pre_content %}
 <div class="row">

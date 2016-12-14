@@ -18,7 +18,6 @@ from ..utils import format_size, format_date, absolute_url as utils_absolute_url
 
 register = template.Library()
 
-
 @register.filter(name='is_checkbox')
 def is_checkbox(field):
     """

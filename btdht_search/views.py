@@ -82,7 +82,10 @@ def index(request, page=1, query=None, order_by=const.ORDER_BY_SCORE, asc='1', c
     return render(
         request,
         "btdht_search/index.html",
-        context({'form': form, 'torrents': torrents, 'query': query, 'category': category})
+        context(
+            request,
+            {'form': form, 'torrents': torrents, 'query': query, 'category': category}
+        )
     )
 
 def autocomplete(request):
@@ -157,7 +160,7 @@ def info_torrent(request, hex_hash, name):
             return redirect("btdht_search:info_torrent", hex_hash, name)
     if torrent.last_scrape == 0:
         torrent.scrape()
-    return render(request, "btdht_search/torrent.html", context({'torrent': torrent}))
+    return render(request, "btdht_search/torrent.html", context(request, {'torrent': torrent}))
 
 
 @require_safe
@@ -182,9 +185,7 @@ def recent(request, page=1):
     return render(
         request,
         "btdht_search/recent.html",
-        context({
-            'torrents': torrents,
-        })
+        context(request, {'torrents': torrents})
     )
 
 
@@ -241,16 +242,19 @@ def stats(request):
     return render(
         request,
         "btdht_search/stats.html",
-        context({
-            'torrent_indexed': json.dumps(torrent_indexed),
-            'categories': json_cat,
-            'times': json.dumps(times),
-            'torrent_rate': json.dumps(torrent_rate),
-            'nb_torrents': result["torrent_indexed"],
-            'torrent_rate_av': torrent_rate_av,
-            'good_tracker': good_tracker,
-            'bad_tracker': bad_tracker
-        })
+        context(
+            request,
+            {
+                'torrent_indexed': json.dumps(torrent_indexed),
+                'categories': json_cat,
+                'times': json.dumps(times),
+                'torrent_rate': json.dumps(torrent_rate),
+                'nb_torrents': result["torrent_indexed"],
+                'torrent_rate_av': torrent_rate_av,
+                'good_tracker': good_tracker,
+                'bad_tracker': bad_tracker
+            }
+        )
     )
 
 
@@ -260,14 +264,14 @@ def api(request):
         user_pref = UserPref.objects.get_or_create(user=request.user)[0]
     else:
         user_pref = None
-    return render(request, "btdht_search/api.html", context({'user_pref': user_pref}))
+    return render(request, "btdht_search/api.html", context(request, {'user_pref': user_pref}))
 
 
 @require_safe
 def about(request):
     if request.method not in {"GET", "HEAD"}:
         return HttpResponse(status=405)
-    return render(request, "btdht_search/about.html", context({}))
+    return render(request, "btdht_search/about.html", context(request, {}))
 
 
 @require_safe

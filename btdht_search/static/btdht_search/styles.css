@@ -35,7 +35,7 @@ body {
     margin: 0 -12%;
 }
 
-@media screen and (max-width: 680px) {
+@media screen and (max-width: 768px) {
     #app-name {
         margin: 0;
     }
