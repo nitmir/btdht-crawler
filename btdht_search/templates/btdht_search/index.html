@@ -22,6 +22,8 @@
 
 
 {% block content2 %}
+<br/>
+{% if settings.BTDHT_ADS_TEMPLATE %}{% include settings.BTDHT_ADS_TEMPLATE %}{% endif %}
 {% if torrents %}
 <h1 id="results">
   Search results

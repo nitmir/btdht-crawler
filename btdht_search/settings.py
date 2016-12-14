@@ -85,6 +85,8 @@ BTDHT_SITEMAP_BASEURL = None
 BTDHT_CONTACT_EMAIL = None
 BTDHT_CONTACT_MAILHIDE_URL = None
 
+BTDHT_ADS_TEMPLATE = None
+
 GLOBALS = globals().copy()
 for name, default_value in GLOBALS.items():
     # only care about parameter begining by BTDHT_
