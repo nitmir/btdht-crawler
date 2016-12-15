@@ -1,11 +1,74 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.0//EN" "http://www.w3.org/TR/2001/PR-SVG-20010719/DTD/svg10.dtd">
-<svg width="2cm" height="2cm" viewBox="653 252 38 39" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-  <g id="Arrière-plan">
-    <g>
-      <ellipse style="fill: #635e80; fill-opacity: 1; stroke-opacity: 1; stroke-width: 2; stroke: #635e80" cx="672.193" cy="272.303" rx="17.5934" ry="18.3027"/>
-      <text font-size="12.8" style="fill: #000000; fill-opacity: 1; stroke: none;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="672.193" y="276.203">
-        <tspan x="672.193" y="276.203"></tspan>
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="2cm"
+   height="2cm"
+   viewBox="653 252 38 39"
+   id="svg2"
+   version="1.1"
+   inkscape:version="0.91 r13725"
+   sodipodi:docname="favicon.svg">
+  <metadata
+     id="metadata17">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <defs
+     id="defs15" />
+  <sodipodi:namedview
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1"
+     objecttolerance="10"
+     gridtolerance="10"
+     guidetolerance="10"
+     inkscape:pageopacity="0"
+     inkscape:pageshadow="2"
+     inkscape:window-width="1177"
+     inkscape:window-height="625"
+     id="namedview13"
+     showgrid="false"
+     inkscape:zoom="3.3302222"
+     inkscape:cx="35.433071"
+     inkscape:cy="35.433071"
+     inkscape:window-x="0"
+     inkscape:window-y="27"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="svg2" />
+  <g
+     id="Arrière-plan"
+     transform="translate(0.16525423,-0.66101693)">
+    <g
+       id="g5">
+      <ellipse
+         style="fill:#635e80;fill-opacity:1;stroke:#635e80;stroke-width:2;stroke-opacity:1"
+         cx="672.19299"
+         cy="272.30301"
+         rx="17.593399"
+         ry="18.3027"
+         id="ellipse7" />
+      <text
+         font-size="12.8"
+         style="font-style:normal;font-weight:normal;font-size:12.80000019px;font-family:sans-serif;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none"
+         x="672.19299"
+         y="276.203"
+         id="text9">
+        <tspan
+           x="672.19299"
+           y="276.203"
+           id="tspan11" />
       </text>
     </g>
   </g>
