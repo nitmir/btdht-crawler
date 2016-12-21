@@ -68,6 +68,7 @@
 {% for t in torrents %}
 <tr>
   <td class="text-nowrap">
+  {% if request.user.is_authenticated or t.dmca_deleted is None %}
     {% if not settings.BTDHT_HIDE_MAGNET_FROM_UNAUTH or request.user.is_authenticated %}
     <a title="magnet link" href="{{t.magnet}}">
       <span class="glyphicon glyphicon-magnet" aria-hidden="true"></span>
@@ -78,6 +79,7 @@
       <span class="glyphicon glyphicon-download-alt" aria-hidden="true"></span>
     </a>
     {% endif %}
+  {% endif %}
   </td>
   <td class="text-nowrap">{{t.categories.0}}</td>
   <td class="full-width"><a href="{% url "btdht_search:info_torrent" t.hex_hash t.name %}">{{t.name}}</a></td>

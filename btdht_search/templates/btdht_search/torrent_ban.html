@@ -1,0 +1,93 @@
+{% extends "btdht_search/base.html" %}
+{% load i18n %}
+{% load btdht_search %}
+
+{% block title %}{{torrent.name}} | BTDHT{% endblock %}
+
+{% block javascript %}
+<script src="{{settings.BTDHT_COMPONENT_URLS.datatable_js}}"></script>
+<script src="{{settings.BTDHT_COMPONENT_URLS.datatable_filesize}}"></script>
+{% endblock %}
+
+{% block extra_head %}<link href="{{settings.BTDHT_COMPONENT_URLS.datatable_css}}" rel="stylesheet">
+        <meta name="robots" content="noindex">{% endblock %}
+
+{% block javascript_inline %}
+$(document).ready(function(){
+    $('#files_table').DataTable({
+        paging: false,
+        columnDefs: [{ type: 'file-size', targets: 1 }]
+    });
+    var search_input = $('#files_table_filter').find('input')
+    search_input.addClass("form-control");
+    search_input.css('width', 'auto');
+    search_input.css('display', 'inline');
+    $('#files_table_info').hide();
+    $('#files_table').wrap('<div class="table-responsive" style="border:none"></div>');
+});
+{% endblock %}
+
+{% block content2 %}
+<div class="alert alert-warning" role="alert">
+<p><strong>Notice</strong></p>
+<p>Due to a Digital Millennium Copyright Act. (DMCA) request or equivalent, this torrent is no longer indexed
+(you will not find it with a textual research) and magnet and/or torrent links are no longer available.
+</p>
+</div>
+<br/>
+<h1>Torrent infos</h1>
+<div class="table-responsive" style="border: none">
+<table class="table">
+<tr><th>Name</th><td>{{torrent.name}}</td></tr>
+<tr><th>Files</th><td>{% if torrent.files %}<a href="#torrent_files">{{torrent.file_nb}}</a>{% else %}{{torrent.file_nb}}{% endif %}</td></tr>
+<tr><th>Size</th><td>{{torrent.size_pp}} ({{torrent.size}} Bytes)</td></tr>
+{% if torrent.categories %}
+<tr><th>{% if torrent.categories|length > 1 %}Categories{% else %}Category{% endif %}</th><td>{{torrent.categories_pp}}</td></tr>
+{% endif %}
+<tr><th>Uploaded</th><td>{{torrent.created_pp}}{% if request.COOKIES.timezone is None %} UTC{% endif %}</td></tr>
+<tr><th>Info Hash</th><td>{{torrent.hex_hash.upper}}</td></tr>
+</table>
+</div>
+{% if settings.BTDHT_ADS_TEMPLATE and not on_tor %}{% include settings.BTDHT_ADS_TEMPLATE %}{% endif %}
+{% if request.user.is_authenticated %}
+{% comment %}<h2>Download Links</h2>{% endcomment %}
+<div class="container">
+<div class="row">
+  <div class="col-lg-3 col-md-3 col-sm-2 col-xs-0"></div>
+  <div class="col-lg-6 col-md-6 col-sm-8 col-xs-12">
+    <ul class="list-group">
+      {% if not settings.BTDHT_HIDE_MAGNET_FROM_UNAUTH or request.user.is_authenticated %}
+      <li class="list-group-item">
+        <a href="{{torrent.magnet}}" class="btn btn-success btn-block btn-lg">
+            <span class="glyphicon glyphicon-magnet" aria-hidden="true"></span> Magnet
+        </a>
+      </li>
+      {% endif %}
+      {% if not settings.BTDHT_HIDE_TORRENT_LINK_FROM_UNAUTH or request.user.is_authenticated %}
+      {% if torrent.url %}
+      <li class="list-group-item">
+        <a href="{{torrent.url}}" class="btn btn-info btn-block btn-lg">
+            <span class="glyphicon glyphicon-download-alt" aria-hidden="true"></span> Torrent file
+        </a>
+      </li>
+      {% endif %}
+      {% endif %}
+    </ul>
+  </div>
+  <div class="col-lg-3 col-md-3 col-sm-2 col-xs-0"></div>
+</div>
+</div>
+{% endif %}
+{% if torrent.files %}
+<h2 id="torrent_files">Torrent Files</h2>
+<table class="table table-striped table-condensed table-responsive" id="files_table">
+<thead><tr><th>Path</th><th>Size</th></tr></thead>
+<tbody>
+{% for file in torrent.files %}
+<tr><td class="full-width">{{file.path}}</td><td class="text-nowrap">{{file.size|size_pp}}</td></tr>
+{% endfor %}
+</tbody>
+</table>
+{% endif %}
+{% endblock %}
+

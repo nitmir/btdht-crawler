@@ -18,6 +18,12 @@ There are currently {{nb_torrents|intword}} ({{nb_torrents|intcomma}}) torrents 
 <table class="table"><tr><td style="border: none">
 <canvas id="torrent_add_rate" width="500" height="400"></canvas>
 </td></tr></table></div>
+<h2>DMCA requests or equivalent</h2>
+<div class="table-responsive" style="border: none">
+<table class="table"><tr><td style="border: none">
+<canvas id="dmca_requests" width="500" height="400"></canvas>
+</td></tr></table></div>
+
 <h2>Tracker scrape</h2>
 <p>
 Leecher/seeders/complete info are retreived from the trackers bellow.
@@ -50,6 +56,7 @@ The result from the tracker with the maximum leecher/seeders/complete is display
 {% block javascript_inline %}
 var torrent_chart_canvas = $("#torrent_chart");
 var torrent_add_rate_canvas = $("#torrent_add_rate");
+var dmca_requests_canvas = $("#dmca_requests");
 var doit;
 var current_width = 0;
 //$( window ).resize(function(){clearTimeout(doit);doit = setTimeout(resize_torrent_chart, 500);});
@@ -59,16 +66,19 @@ function resize_torrent_chart(delay){
     if(height <= 992 && current_width != 700){
         torrent_chart_canvas.attr("width", 700);
         torrent_add_rate_canvas.attr("width", 700);
+        dmca_requests_canvas.attr("width", 700);
         current_width = 700;
         draw(delay);
     } else if(height <= 1200 && height > 992 && current_width != 900){
         torrent_chart_canvas.attr("width", 900);
         torrent_add_rate_canvas.attr("width", 900);
+        dmca_requests_canvas.attr("width", 900);
         current_width = 900;
         draw(delay);
     } else if(height > 1200 && current_width != 1100){
         torrent_chart_canvas.attr("width", 1100);
         torrent_add_rate_canvas.attr("width", 1100);
+        dmca_requests_canvas.attr("width", 1100);
         current_width = 1100;
         draw(delay);
     }
@@ -76,8 +86,30 @@ function resize_torrent_chart(delay){
 function draw(delay){
     setTimeout(draw_torrent_chart, delay);
     setTimeout(draw_torrent_add_rate, delay);
+    setTimeout(draw_dmca_requests(), delay);
 }
-function draw_torrent_add_rate(){
+function draw_dmca_requests(){
+    var ctx = document.getElementById("dmca_requests");
+    var myChart = new Chart(ctx,{% nospace %}{
+        type: 'bar',
+        data: {
+            labels: {{dmca_labels|safe}},
+            datasets: [
+                {
+                    label: '# torrent withdraw from the index after a dmca requests',
+                    data: {{dmca_values|safe}},
+                }
+            ]
+        },
+        options: {
+            animation: false,
+            maintainAspectRatio: false,
+            responsive: false,
+        }
+    });
+}
+
+{% endnospace %}function draw_torrent_add_rate(){
     var ctx = document.getElementById("torrent_add_rate");
     var myChart = new Chart(ctx,{% nospace %}{
         type: 'line',

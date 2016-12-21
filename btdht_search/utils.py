@@ -196,4 +196,55 @@ def normalize_ip_archive(ip):
         return ""
 
 
+def dmca_ban(hash):
+    public_db = getdb()
+    ban_db = getdb("torrents_ban")
+    db = getdb("torrents")
+    db.update(
+        {'_id': Binary(hash)},
+        {"$set": {'status': 2}},
+        upsert=True
+    )
+    results = public_db.find({"_id": Binary(hash)}, {'_id': False})
+    if results.count() == 1:
+        obj = results[0]
+        obj["dmca_deleted"] = time.time()
+        ban_db.update({'_id': Binary(hash)}, obj, upsert=True)
+        public_db.remove({"_id": Binary(hash)})
+        obj['_id'] = hash
+        return obj
+
+
+def dmca_unban(hash):
+    public_db = getdb()
+    ban_db = getdb("torrents_ban")
+    db = getdb("torrents")
+    results = db.find({"_id": Binary(hash)})
+    # hash is not banned
+    if results.count() == 0:
+        return
+    else:
+        status = results[0]
+    # hash is not banned
+    if status['status'] != 2:
+        return
+    results = ban_db.find({"_id": Binary(hash)}, {'_id': False})
+    if results.count() == 1:
+        obj = results[0]
+        del obj["dmca_deleted"]
+        public_db.update({'_id': Binary(hash)}, obj, upsert=True)
+        ban_db.remove({"_id": Binary(hash)})
+        db.update(
+            {'_id': Binary(hash)},
+            {"$set": {'status': 1}},
+            upsert=True
+        )
+        return obj
+    else:
+        db.update(
+            {'_id': Binary(hash)},
+            {"$set": {'status': 0}},
+            upsert=True
+        )
+
 import models

@@ -1,0 +1,63 @@
+{% extends "btdht_search/base.html" %}
+{% load i18n %}
+{% load staticfiles %}
+{% load btdht_search %}
+{% load humanize %}
+{% block title %}BTDHT | Found torrents no longer indexed{% endblock %}
+
+{% block extra_pre_head %}<meta name="robots" content="noindex">{% endblock %}
+
+{% block javascript %}
+<script src="{{settings.BTDHT_COMPONENT_URLS.datatable_js}}"></script>
+<script src="{{settings.BTDHT_COMPONENT_URLS.datatable_filesize}}"></script>
+<noscript><style>
+#dmca_table {
+    display: table;
+}
+</style></noscript>
+{% endblock %}
+
+{% block extra_head %}
+<link href="{% static "btdht_search/datatable_paginate.css" %}" rel="stylesheet">
+<link href="{{settings.BTDHT_COMPONENT_URLS.datatable_css}}" rel="stylesheet">
+{% endblock %}
+
+{% block javascript_inline %}
+$(document).ready(function(){
+    $('#dmca_table').DataTable({
+        paging: true,
+        pageLength: 25,
+        lengthMenu: [[25, 50, 100, 500, -1], [25, 50, 100, 500, "All"]],
+        order: [[ 2, 'desc' ]],
+    });
+    var search_input = $('#dmca_table_filter').find('input');
+    var select_input = $('#dmca_table_length').find('select');
+    search_input.addClass("form-control");
+    select_input.addClass("form-control");
+    $('#dmca_table_length').css("float", "left");
+    //search_input.css('width', 'auto');
+    //search_input.css('display', 'inline');
+    //$('#dmca_table_info').hide();
+    $('#dmca_table').wrap('<div class="table-responsive" style="border:none"></div>');
+    $('#dmca_table').show();
+});
+{% endblock %}
+
+
+
+{% block content2 %}
+<h1>Found torrents no longer indexed</h1>
+<p>Here is the list of all torrents (currently {{results.count|intword}}) that where found crawling the DHT but are
+no longer indexed (you will not find them doing a textual research) due to a DMCA request or
+equivalent</p>
+<div class="table-responsive2">
+<table class="table table-striped table-condensed table-responsive" id="dmca_table">
+<thead><tr><th>Torrent hash</th><th class="full-width">Torrent name</th><th>DMCA request</th></tr></thead>
+<tbody>
+{% for obj in results %}
+<tr><td class="text-nowrap">{{obj.hex_hash}}</td><td class="full-width">{{obj.name}}</td><td class="text-nowrap">{{obj.dmca_deleted_pp}}</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endblock %}

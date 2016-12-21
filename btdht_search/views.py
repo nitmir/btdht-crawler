@@ -154,14 +154,15 @@ def info_torrent(request, hex_hash, name):
         raise Http404()
     if name != torrent.name and name != normalize_name(torrent.name):
         raise Http404()
-    if request.method == "POST":
-        if 'scrape' in request.POST:
-            torrent.scrape()
-            return redirect("btdht_search:info_torrent", hex_hash, name)
-    if torrent.last_scrape == 0:
+    elif torrent.dmca_deleted is not None:
+        return render(request, "btdht_search/torrent_ban.html", context(request, {'torrent': torrent}))
+    elif request.method == "POST" and 'scrape' in request.POST:
         torrent.scrape()
-    return render(request, "btdht_search/torrent.html", context(request, {'torrent': torrent}))
-
+        return redirect("btdht_search:info_torrent", hex_hash, name)
+    else:
+        if torrent.last_scrape == 0:
+            torrent.scrape()
+        return render(request, "btdht_search/torrent.html", context(request, {'torrent': torrent}))
 
 @require_safe
 def api_info_torrent(request, hex_hash):
@@ -239,6 +240,15 @@ def stats(request):
     json_cat = []
     for i, cat in enumerate(const.categories):
         json_cat.append((cat, json.dumps(categories[cat]), colors[i]))
+
+    dmca = collections.defaultdict(int)
+    for torrent in getdb("torrents_ban").find({}, {'dmca_deleted': True}):
+        dmca[datetime.fromtimestamp(torrent["dmca_deleted"]).date()] += 1
+    dmca = [('%s' % key, value) for key, value in dmca.items()]
+    dmca.sort()
+    dmca = dmca[1:]
+    dmca_labels, dmca_values = zip(*dmca)
+
     return render(
         request,
         "btdht_search/stats.html",
@@ -252,7 +262,9 @@ def stats(request):
                 'nb_torrents': result["torrent_indexed"],
                 'torrent_rate_av': torrent_rate_av,
                 'good_tracker': good_tracker,
-                'bad_tracker': bad_tracker
+                'bad_tracker': bad_tracker,
+                'dmca_labels': json.dumps(dmca_labels),
+                'dmca_values': json.dumps(dmca_values),
             }
         )
     )
@@ -312,3 +324,11 @@ def sitemap(request, file=None):
 @require_safe
 def robots_txt(request):
     return render(request, "btdht_search/robots.txt", content_type="text/plain")
+
+
+@require_safe
+def dmca(request):
+    db = getdb("torrents_ban")
+    results = db.find({}, {'files': False}).sort([("dmca_deleted", -1), ('name', 1), ('_id', 1)])
+    return render(request, "btdht_search/dmca.html", context(request, {'results': [Torrent(obj=obj, no_files=True, request=request) for obj in results]}))
+

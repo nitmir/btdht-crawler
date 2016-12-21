@@ -188,6 +188,7 @@ class Torrent(object):
     file_nb = None
     size = None
     categories = None
+    dmca_deleted = None
 
     seeds = None
     peers = None
@@ -236,6 +237,8 @@ class Torrent(object):
         if category > 0:
             search_query = {"$and": [search_query, {'categories': const.categories[category-1]}]}
         results = db.find(search_query, {"score": {"$meta": "textScore"}, 'files': False})
+        if re.match("^[0-9A-Fa-f]{40}$", query) and results.count() == 0:
+            results = getdb("torrents_ban").find({'_id': Binary(query.decode("hex"))}, {"score": {"$meta": "textScore"}, 'files': False})
         return TorrentsList(
             results,
             url=lambda page: reverse(
@@ -275,9 +278,9 @@ class Torrent(object):
     def __init__(self, hash=None, obj=None, no_files=False, timezone='UTC'):
         self._timezone = timezone
         if obj is None and hash is not None:
-            db = getdb()
-
-            results = db.find({"_id": Binary(hash)})
+            results = getdb().find({"_id": Binary(hash)})
+            if results.count() == 0:
+                results = getdb("torrents_ban").find({'_id': utils.Binary(hash)})
             if results.count() != 1:
                 raise ValueError("Torrent for hash %r not found" % hash)
             obj = results[0]
@@ -296,6 +299,7 @@ class Torrent(object):
             self.complete = obj.get('complete')
             self.last_scrape = obj.get('last_scrape', 0)
             self.categories = obj.get('categories')
+            self.dmca_deleted = obj.get('dmca_deleted')
         else:
             raise ValueError("missing value to initialize Torrent object")
 
@@ -353,6 +357,11 @@ class Torrent(object):
             return format_date(self.last_scrape, timezone=self._timezone)
         else:
             "never"
+
+    @property
+    def dmca_deleted_pp(self):
+        if self.dmca_deleted is not None:
+            return format_date(self.dmca_deleted, timezone=self._timezone)
 
     @property
     def created_delta(self):

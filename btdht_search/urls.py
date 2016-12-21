@@ -84,4 +84,5 @@ urlpatterns = [
     url("^sitemap.xml.gz", require_login(views.sitemap), name="sitemap_index"),
     url("^sitemap/(?P<file>[0-9A-Za-z\.]+)", require_login(views.sitemap), name="sitemap"),
     url("^robots.txt$", require_login(views.robots_txt), name="robots.txt"),
+    url("^dmca$", require_login(views.dmca), name="dmca"),
 ]

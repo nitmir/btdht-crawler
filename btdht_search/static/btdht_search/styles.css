@@ -126,3 +126,11 @@ select.select-noarrow::-ms-expand {
 .ui-autocomplete {
    z-index:2000;
 }
+
+#dmca_table {
+    display: none;
+}
+
+#dmca_table tr td:first-child {
+    font-family:monospace;
+}
