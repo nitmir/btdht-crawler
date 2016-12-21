@@ -27,7 +27,6 @@ def index(request, page=1, query=None, order_by=const.ORDER_BY_SCORE, asc='1', c
     torrents = None
     page = int(page)
     category = int(category if category is not None else 0)
-    timezone = request.COOKIES.get('timezone', 'UTC')
     if page < 1:
         return redirect(
             "btdht_search:index_query",
@@ -68,7 +67,7 @@ def index(request, page=1, query=None, order_by=const.ORDER_BY_SCORE, asc='1', c
             order_by=order_by,
             asc=(asc == '1'),
             category=category,
-            timezone=timezone
+            request=request
         )
         if page > torrents.last_page:
             return redirect(
@@ -109,7 +108,7 @@ def api_search(request, page=1, query=None):
     page = int(page)
     if page < 1:
         raise Http404()
-    torrents = Torrent.search(query, page=page)
+    torrents = Torrent.search(query, page=page, request=request)
     if page > torrents.last_page:
         raise Http404()
     return render_json(torrents.data(request))
@@ -120,7 +119,7 @@ def download_torrent(request, hex_hash, name):
     if settings.BTDHT_HIDE_TORRENT_LINK_FROM_UNAUTH and not request.user.is_authenticated():
         raise PermissionDenied()
     try:
-        torrent = Torrent(hex_hash.decode("hex"))
+        torrent = Torrent(hex_hash.decode("hex"), request=request)
     except ValueError:
         raise Http404()
     if name != torrent.name:
@@ -146,10 +145,9 @@ def download_torrent(request, hex_hash, name):
 
 
 @require_http_methods(["GET", "HEAD", "POST"])
-def info_torrent(request, hex_hash, name):
-    timezone = request.COOKIES.get('timezone', 'UTC')
+def info_torrent(request, hex_hash, name=None):
     try:
-        torrent = Torrent(hex_hash.decode("hex"), timezone=timezone)
+        torrent = Torrent(hex_hash.decode("hex"), request=request)
     except ValueError:
         raise Http404()
     if name != torrent.name and name != normalize_name(torrent.name):
@@ -167,19 +165,18 @@ def info_torrent(request, hex_hash, name):
 @require_safe
 def api_info_torrent(request, hex_hash):
     try:
-        torrent = Torrent(hex_hash.decode("hex"))
-    except ValueError:
-        raise Http404()
-    return render_json(torrent.data(request))
+        torrent = Torrent(hex_hash.decode("hex"), request=request)
+    except ValueError as error:
+        raise Http404(error)
+    return render_json(torrent.data())
 
 
 @require_safe
 def recent(request, page=1):
     page = int(page)
-    timezone = request.COOKIES.get('timezone', 'UTC')
     if page < 1:
         return redirect("btdht_search:recent", 1)
-    torrents = Torrent.recent(page, settings.BTDHT_RECENT_MAX, timezone=timezone)
+    torrents = Torrent.recent(page, settings.BTDHT_RECENT_MAX, request=request)
     if page > torrents.last_page:
         return redirect("btdht_search:recent", torrents.last_page)
     request.session["query"] = None

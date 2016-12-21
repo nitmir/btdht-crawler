@@ -30,9 +30,13 @@ class TorrentsList(object):
 
     def __init__(
         self, cursor, url, page=1, max_results=None, order_by=None,
-        asc=True, order_url=None, timezone='UTC'
+        asc=True, order_url=None, request=None
     ):
-        self._timezone = timezone
+        self._request = request
+        if request is not None:
+            self._timezone = request.COOKIES.get('timezone', 'UTC')
+        else:
+            self._timezone = 'UTC'
         self.order_url = order_url
         if order_by:
             self.order_by = order_by
@@ -118,12 +122,20 @@ class TorrentsList(object):
                 scrape_result = scrape(to_scrape)
                 for result in torrents:
                     result.update(scrape_result.get(str(result['_id']), {}))
-                    torrent = Torrent(obj=result, no_files=True, timezone=self._timezone)
+                    torrent = Torrent(
+                        obj=result,
+                        no_files=True,
+                        request=self._request
+                    )
                     self.torrents.append(torrent)
                     yield torrent
             else:
                 for result in torrents:
-                    torrent = Torrent(obj=result, no_files=True, timezone=self._timezone)
+                    torrent = Torrent(
+                        obj=result,
+                        no_files=True,
+                        request=self._request
+                    )
                     self.torrents.append(torrent)
                     yield torrent
         else:
@@ -172,8 +184,8 @@ class TorrentsList(object):
     def show_end_suspension(self):
         return self.end_page < (self.last_page - 1)
 
-    def data(self, request):
-        return [torrent.data(request) for torrent in self]
+    def data(self):
+        return [torrent.data() for torrent in self]
 
 
 # Create your models here.
@@ -196,8 +208,8 @@ class Torrent(object):
 
     last_scrape = 0
 
-    def data(self, request):
-        is_auth = request.user.is_authenticated()
+    def data(self):
+        is_auth = self._request.user.is_authenticated()
         if settings.BTDHT_REQUIRE_AUTH and not is_auth:
             return {}
         data = {
@@ -223,7 +235,7 @@ class Torrent(object):
         return data
 
     @staticmethod
-    def search(query, page=1, order_by=const.ORDER_BY_SCORE, asc=True, category=0, timezone='UTC'):
+    def search(query, page=1, order_by=const.ORDER_BY_SCORE, asc=True, category=0, request=None):
         db = getdb()
         search_query = {}
 
@@ -255,11 +267,11 @@ class Torrent(object):
             page=page,
             order_by=order_by,
             asc=asc,
-            timezone=timezone
+            request=request
         )
 
     @staticmethod
-    def recent(page, max_results=None, timezone='UTC'):
+    def recent(page, max_results=None, request=None):
         db = getdb()
         results = db.find(
             {},
@@ -272,11 +284,15 @@ class Torrent(object):
             url=lambda page: reverse("btdht_search:recent", args=[page]) + '#recent',
             page=page,
             max_results=max_results,
-            timezone=timezone
+            request=request
         )
 
-    def __init__(self, hash=None, obj=None, no_files=False, timezone='UTC'):
-        self._timezone = timezone
+    def __init__(self, hash=None, obj=None, no_files=False, request=None):
+        self._request = request
+        if request is not None:
+            self._timezone = request.COOKIES.get('timezone', 'UTC')
+        else:
+            self._timezone = 'UTC'
         if obj is None and hash is not None:
             results = getdb().find({"_id": Binary(hash)})
             if results.count() == 0:
