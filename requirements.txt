@@ -8,3 +8,4 @@ pytz
 netaddr
 geoip2
 django-recaptcha2
+django-cookie-law

@@ -4,6 +4,7 @@ from django.http import Http404, StreamingHttpResponse, HttpResponse, HttpRespon
 from django.shortcuts import render, redirect
 from django.core.exceptions import PermissionDenied
 from django.views.decorators.http import require_http_methods, require_safe
+from django.views.decorators.cache import cache_page
 from wsgiref.util import FileWrapper
 
 from btdht.utils import bencode, bdecode
@@ -87,6 +88,7 @@ def index(request, page=1, query=None, order_by=const.ORDER_BY_SCORE, asc='1', c
         )
     )
 
+@require_safe
 def autocomplete(request):
     query = utils.normalize_search_archive(request.GET.get("term", ""))
     if not query:
@@ -200,6 +202,7 @@ def api_recent(request, page=1):
     return render_json(torrents.data(request))
 
 
+@cache_page(30 * 60)
 @require_safe
 def stats(request):
     db = getdb("torrents_stats")
