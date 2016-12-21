@@ -6,6 +6,8 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>{% block title %}{% trans "BTDHT Search"  %}{% endblock %}</title>
         {% block extra_pre_head %}{% endblock %}
+        <meta name="description" content="A bittorrent DHT search engine: search for torrents in the bittorrent's Distributed Hash Table">
+        <link rel="sitemap" type="application/xml" title="Sitemap" href="{% url "btdht_search:sitemap_index" %}">
         <link rel="stylesheet" href="{{settings.BTDHT_COMPONENT_URLS.jqueryui_css}}">
         <link href="{{settings.BTDHT_COMPONENT_URLS.bootstrap3_css}}" rel="stylesheet">
         <link href="{{settings.BTDHT_COMPONENT_URLS.fontawesome}}" rel="stylesheet">
@@ -66,9 +68,3 @@ $('#srch-term').autocomplete({
 </script>
     </body>
 </html>
-<!--
-Powered by django-btdht-crawler version {{VERSION}}
-
-Pypi: https://pypi.python.org/pypi/django-btdht-crawler
-github: https://github.com/nitmir/django-btdht-crawler
--->

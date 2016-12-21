@@ -72,7 +72,7 @@ select.select-noarrow::-ms-expand {
 
 
 .full-width {
-    width: *;
+    width: 100%;
     word-wrap:break-word;
     word-break: break-all;
 }
@@ -83,7 +83,7 @@ select.select-noarrow::-ms-expand {
 
 @media screen and (max-width: 1200px) and (min-width: 992px){
     #srch-term {
-        width: 165px;
+        width: 164px;
     }
     #navbar-container {
         width: 980px;
@@ -91,7 +91,7 @@ select.select-noarrow::-ms-expand {
 }
 @media (max-width: 991px) and (min-width: 768px){
     #srch-term {
-        width: 175px;
+        width: 173px;
     }
 }
 @media (max-width: 768px) {
