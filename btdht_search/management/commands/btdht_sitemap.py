@@ -55,7 +55,7 @@ class Command(BaseCommand):
         self.gen_index(*args, **options)
 
     def gen_static(self):
-        print "Generating static sitemap"
+        print("Generating static sitemap")
         urls = [
             (reverse("btdht_search:index"), "weekly"),
             (reverse("btdht_search:stats"), "hourly"),
@@ -80,7 +80,7 @@ class Command(BaseCommand):
         )
 
     def gen_recent(self):
-        print "Generating recent sitemap"
+        print("Generating recent sitemap")
         db = getdb()
         results = db.find(
             {},
@@ -142,7 +142,7 @@ class Command(BaseCommand):
             MAX_SIZE * (page - 1)
         ).limit(MAX_SIZE)
         while req.count(with_limit_and_skip=True) > 0:
-            print "Generating sitemap %s" % page
+            print("Generating sitemap %s" % page)
             with gzip.open(
                 os.path.join(settings.BTDHT_SITEMAP_DIR, "%s.xml.new.gz" % page),
                 'w'
@@ -190,7 +190,7 @@ class Command(BaseCommand):
             ).limit(MAX_SIZE)
 
     def gen_index(self, *args, **options):
-        print "Generating sitemap index"
+        print("Generating sitemap index")
         sitemap_pages = [
             file for file in os.listdir(settings.BTDHT_SITEMAP_DIR)
             if file.endswith(".xml.gz") and file != "index.xml.gz"

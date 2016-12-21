@@ -136,9 +136,9 @@ def scrape_udp(parsed_trackers, hashes, timeout=1):
                         )
                         hashes_to_scrape = hashes[hash_id * 74: (hash_id+1) * 74]
                     elif action == 3:
-                        print "%s error: %s" % (tracker, udp_parse_error(buf, transaction_id))
+                        print("%s error: %s" % (tracker, udp_parse_error(buf, transaction_id)))
                     else:
-                        print "Get other action != status = 2: %s == %s" % (action, status)
+                        print("Get other action != status = 2: %s == %s" % (action, status))
                     if hashes_to_scrape:
                         req, transaction_id = udp_create_scrape_request(
                             transaction_ids,

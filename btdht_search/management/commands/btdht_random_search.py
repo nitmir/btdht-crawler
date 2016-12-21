@@ -27,10 +27,10 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         query = getdb("torrents_search").aggregate([{'$sample':{'size': 1}}]).next()['query']
-        print "Search for %s" % query
+        print(u"Search for %s" % query).encode("utf-8")
         results = getdb().find(
             {"$text": {"$search": query, '$language': "english"}},
             {"score": {"$meta": "textScore"}, 'name': True}
         ).sort([("score", {"$meta": "textScore"})]).limit(25)
         for result in results:
-            print " * %s" % result['name'] 
+            print(u" * %s" % result['name']).encode("utf-8")
