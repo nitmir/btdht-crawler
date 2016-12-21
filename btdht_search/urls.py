@@ -26,22 +26,22 @@ urlpatterns = [
         name='download_torrent'
     ),
     url(
-        '^(?P<token>[0-9A-Fa-f]{32})/download/(?P<hex_hash>[0-9A-Fa-f]{40})/(?P<name>.*)\.torrent$',
+        'api/auth/^(?P<token>[0-9A-Fa-f]{32})/download/(?P<hex_hash>[0-9A-Fa-f]{40})/(?P<name>.*)\.torrent$',
         token_auth(views.download_torrent),
         name='download_torrent'
     ),
     url(
-        '^torrent/(?P<hex_hash>[0-9A-Fa-f]{40})/(?P<name>.*)$',
+        '^torrent/(?P<hex_hash>[0-9A-Fa-f]{40})/(?P<name>.*)?$',
         require_login(views.info_torrent),
         name='info_torrent'
     ),
     url(
-        '^torrent/(?P<hex_hash>[0-9A-Fa-f]{40}).json$',
+        '^api/torrent/(?P<hex_hash>[0-9A-Fa-f]{40}).json$',
         require_login(views.api_info_torrent),
         name='api_info_torrent'
     ),
     url(
-        '^(?P<token>[0-9A-Fa-f]{32})/torrent/(?P<hex_hash>[0-9A-Fa-f]{40}).json$',
+        '^api/auth/(?P<token>[0-9A-Fa-f]{32})/torrent/(?P<hex_hash>[0-9A-Fa-f]{40}).json$',
         token_auth(views.api_info_torrent),
         name='api_info_torrent_token'
     ),
@@ -54,27 +54,33 @@ urlpatterns = [
         name='index_query'
     ),
     url(
-        '^search/(?P<query>.*)/(?P<page>[0-9]+).json',
+        (
+            '^api/search/(?P<query>.*)/(?P<page>[0-9]+)/(?P<order_by>[1-7])/'
+            '(?P<asc>[0-1])/(?P<category>[0-7]).json'
+        ),
         require_login(views.api_search),
         name='api_search'
     ),
     url(
-        '^(?P<token>[0-9A-Fa-f]{32})/search/(?P<query>.*)/(?P<page>[0-9]+).json',
+        (
+            '^api/auth/(?P<token>[0-9A-Fa-f]{32})/search/(?P<query>.*)/(?P<page>[0-9]+)/',
+            '(?P<order_by>[1-7])/(?P<asc>[0-1])/(?P<category>[0-7]).json'
+        ),
         token_auth(views.api_search),
         name='api_search_token'
     ),
     url('^autocomplete$', require_login(views.autocomplete), name="autocomplete"),
     url('^recent$', require_login(views.recent), name='recent_index'),
-    url('^recent.json$', require_login(views.api_recent), name='api_recent_index'),
+    url('^api/recent.json$', require_login(views.api_recent), name='api_recent_index'),
     url('^recent/(?P<page>[0-9]+)$', require_login(views.recent), name='recent'),
-    url('^recent/(?P<page>[0-9]+).json', require_login(views.api_recent), name='api_recent'),
+    url('^api/recent/(?P<page>[0-9]+).json', require_login(views.api_recent), name='api_recent'),
     url(
-        '^(?P<token>[0-9A-Fa-f]{32})/recent.json$',
+        '^api/auth/(?P<token>[0-9A-Fa-f]{32})/recent.json$',
         token_auth(views.api_recent),
         name='api_recent_index_token'
     ),
     url(
-        '^(?P<token>[0-9A-Fa-f]{32})/recent/(?P<page>[0-9]+).json',
+        '^api/auth/(?P<token>[0-9A-Fa-f]{32})/recent/(?P<page>[0-9]+).json',
         token_auth(views.api_recent),
         name='api_recent_token'
     ),

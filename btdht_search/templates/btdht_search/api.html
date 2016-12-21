@@ -14,10 +14,10 @@
 <ul>
   <li>
     For fetcthing search results :
-    {% url "btdht_search:api_search" "AZERTYUIOP" 123456789 as search_url %}
-    <pre>{{search_url|replace:"AZERTYUIOP:<query>"|replace:"123456789:<page_nb>"|absolute_url:request}}</pre>
+    {% url "btdht_search:api_search" "AZERTYUIOP" 1 2 0 4 as search_url %}
+    <pre>{{search_url|replace:"AZERTYUIOP:<query>"|replace:"1:<page_nb>"|replace:"2:<order_by>"|replace:"0:<asc>"|replace:"4:<category>"|absolute_url:request}}</pre>
     For instance:
-{% url "btdht_search:api_search" "debian" 1 as search_url %}
+{% url "btdht_search:api_search" "debian" 1 1 1 0 as search_url %}
 <pre>
 $ curl {{search_url|absolute_url:request}}
 [
@@ -78,7 +78,6 @@ $ curl {{torrent_url|absolute_url:request}}
 {% url "btdht_search:api_recent" 1 as recent_url %}
 <pre>
 $ curl {{recent_url|absolute_url:request}}
-curl http://127.0.0.1:8000/recent/1.json
 [
  {
   "peers": 9, 

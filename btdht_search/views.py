@@ -102,7 +102,7 @@ def autocomplete(request):
     return render_json([r['_id'] for r in results])
 
 @require_safe
-def api_search(request, page=1, query=None):
+def api_search(request, page=1, query=None, order_by=const.ORDER_BY_SCORE, asc='1', category=0):
     if not query:
         return render_json([])
     page = int(page)
