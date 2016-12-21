@@ -95,6 +95,14 @@ BTDHT_DMCA_EMAIL_ARCHIVE = "INBOX.done"
 BTDHT_DMCA_EMAIL_ALLOWED_HEADERS = {}
 BTDHT_DMCA_EMAIL_DKIM = True
 
+BTDHT_LEGAL_TEMPLATE = "btdht_search/legal.html"
+BTDHT_LEGAL_CAPTCHA_PROTECT = True
+BTDHT_LEGAL_CREATOR = None
+BTDHT_LEGAL_HOSTING_PROVIDER = None
+
+BTDHT_LEGAL_ENABLE = True
+
+
 GLOBALS = globals().copy()
 for name, default_value in GLOBALS.items():
     # only care about parameter begining by BTDHT_
@@ -109,3 +117,13 @@ for name, default_value in GLOBALS.items():
 MERGED_BTDHT_COMPONENT_URLS = BTDHT_COMPONENT_URLS.copy()
 MERGED_BTDHT_COMPONENT_URLS.update(settings.BTDHT_COMPONENT_URLS)
 settings.BTDHT_COMPONENT_URLS = MERGED_BTDHT_COMPONENT_URLS
+
+settings.BTDHT_LEGAL_ENABLE = settings.BTDHT_LEGAL_ENABLE and (
+    (
+        settings.BTDHT_LEGAL_TEMPLATE == "btdht_search/legal.html" and
+        (
+            settings.BTDHT_LEGAL_CREATOR or
+            settings.BTDHT_LEGAL_HOSTING_PROVIDER
+        )
+    ) or settings.BTDHT_LEGAL_TEMPLATE
+)

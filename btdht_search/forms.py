@@ -12,6 +12,9 @@
 from django import forms
 from django.forms import widgets
 
+from snowpenguin.django.recaptcha2.fields import ReCaptchaField
+from snowpenguin.django.recaptcha2.widgets import ReCaptchaWidget
+
 import const
 
 
@@ -51,3 +54,7 @@ class SearchForm(BootsrapForm):
         choices=const.categories_choices,
         widget=forms.RadioSelect(),
     )
+
+
+class CaptchaForm(BootsrapForm):
+    captcha = ReCaptchaField(widget=ReCaptchaWidget(), label="")

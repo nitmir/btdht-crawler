@@ -1,0 +1,36 @@
+{% extends "btdht_search/base.html" %}
+{% load i18n %}
+{% load btdht_search %}
+{% load recaptcha2 %}
+
+{% block title %}BTDHT | Legal notice{% endblock %}
+
+{% block extra_pre_head %}
+<meta name="robots" content="noindex">
+{% recaptcha_init %}
+{% endblock %}
+
+{% block content %}
+<h1>Legal notice</h1>
+<p>This web site was created and is hosted in France by an individual. Accordingly to
+<a href="https://www.service-public.fr/professionnels-entreprises/vosdroits/F31228">than</a> (in french), the only
+mandatory legal notice are: First name, name, address and phone number of the site creator and hosting provider.</p>
+
+{% if not display %}
+To display these informations, please complete this captcha and click on <strong>Display</strong>
+<form method="POST">
+      {% csrf_token %}
+      {{ form }}
+      <input type="submit" value="Display" class="btn btn-primary">
+</form>
+{% else %}
+{% if settings.BTDHT_LEGAL_CREATOR %}
+<h2>Creator</h2>
+{{settings.BTDHT_LEGAL_CREATOR|safe}}
+{% endif %}
+{% if settings.BTDHT_LEGAL_HOSTING_PROVIDER %}
+<h2>Hosting provider</h2>
+{{settings.BTDHT_LEGAL_HOSTING_PROVIDER|safe}}
+{% endif %}
+{% endif %}
+{% endblock %}

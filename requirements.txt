@@ -7,3 +7,4 @@ requests_futures
 pytz
 netaddr
 geoip2
+django-recaptcha2

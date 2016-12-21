@@ -17,7 +17,7 @@ from datetime import datetime
 
 import utils
 from .utils import context, getdb, format_date, scrape, render_json, normalize_name
-from .forms import SearchForm
+from .forms import SearchForm, CaptchaForm
 from .models import Torrent, UserPref
 import const
 
@@ -332,3 +332,22 @@ def dmca(request):
     results = db.find({}, {'files': False}).sort([("dmca_deleted", -1), ('name', 1), ('_id', 1)])
     return render(request, "btdht_search/dmca.html", context(request, {'results': [Torrent(obj=obj, no_files=True, request=request) for obj in results]}))
 
+
+@require_http_methods(["GET", "HEAD", "POST"])
+def legal(request):
+    if not settings.BTDHT_LEGAL_ENABLE:
+        raise Http404()
+    if settings.BTDHT_LEGAL_CAPTCHA_PROTECT:
+        display = False
+        if request.method == "POST":
+            form = CaptchaForm(request.POST)
+            if form.is_valid():
+                display = True
+        else:
+            form = CaptchaForm()
+    else:
+        display = True
+        form = None
+    response = render(request, settings.BTDHT_LEGAL_TEMPLATE, context(request, {'form': form, 'display': display}))
+    response["X-Robots-Tag"] = "noindex"
+    return response

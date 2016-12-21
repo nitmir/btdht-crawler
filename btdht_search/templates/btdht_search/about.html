@@ -29,6 +29,8 @@ torrent metadata (such as file names and file sizes) and a magnet link (torrent 
 BTDHT Search is fully automated and no one but the automated program crawling the DHT is adding torrents metadata to the database.
 </p>
 
+<h1>Contact</h1>
+
 {% if settings.BTDHT_CONTACT_MAILHIDE_URL or settings.BTDHT_CONTACT_EMAIL %}
 <p>
 If you have any question, you can contact the site webmaster by mail
@@ -43,6 +45,11 @@ If you have any question, you can contact the site webmaster by mail
   title="Reveal this e-mail address">here</a>.
 {% else %}at the address <a href="mailto:{{settings.BTDHT_CONTACT_EMAIL}}">{{settings.BTDHT_CONTACT_EMAIL}}</a>{% endif %}
 <p>
+
+<h1>Legal</h1>
+{% if settings.BTDHT_LEGAL_ENABLE %}<p>You will find our legal notice <a href="{% url "btdht_search:legal" %}">here</a>.<p>{% endif %}
+<p>
+You will find the list of torrents found crawling the DHT that are no longer indexed due to a DMCA request or equivalent <a href="{% url "btdht_search:dmca" %}">here</a>
 {% endif %}
 {% endblock %}
 
