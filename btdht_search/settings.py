@@ -107,6 +107,9 @@ BTDHT_LEGAL_ENABLE = True
 
 BTDHT_SOCIAL_SHARE = ["twitter", "facebook", "google", "reddit"]
 
+BTDHT_FACEBOOK_PAGE = None
+BTDHT_TWITTER_NAME = None
+
 GLOBALS = globals().copy()
 for name, default_value in GLOBALS.items():
     # only care about parameter begining by BTDHT_

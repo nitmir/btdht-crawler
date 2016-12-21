@@ -88,7 +88,7 @@ $(document).ready(function(){
     href="{{share.url|safe}}"
     title="{{share.txt}}"
     {% if share.js %}onclick="{{share.js|safe}}"{% endif %}
-  ><span class="fa fa-{{name}}"></span> {{share.txt}}</a>
+  ><span class="fa fa-{% if share.icon %}{{share.icon}}{% else %}{{name}}{% endif %}"></span> {{share.txt}}</a>
 {% endif %}
 {% endfor %}
 {% endif %}

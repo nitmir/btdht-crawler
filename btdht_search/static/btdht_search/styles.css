@@ -134,3 +134,7 @@ select.select-noarrow::-ms-expand {
 #dmca_table tr td:first-child {
     font-family:monospace;
 }
+
+.fb_iframe_widget span {
+    vertical-align: baseline !important;
+}

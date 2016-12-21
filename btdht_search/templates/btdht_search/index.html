@@ -18,6 +18,20 @@
 {% include "btdht_search/form.html" %}
 <button class="btn btn-primary btn-block btn-lg" type="submit">{% trans "Search" %}</button>
 </form>
+
+<br/>
+
+<div class="text-center">
+{% if settings.BTDHT_FACEBOOK_PAGE %}
+<span class="fb-like" data-href="https://www.facebook.com/BTDHTsearch/" data-layout="button_count" data-action="like" data-show-faces="true" data-share="false"></span>
+{% endif %}
+{% if settings.BTDHT_TWITTER_NAME %}
+<a class="twitter-follow-button"
+  onclick="window.open('https://twitter.com/intent/follow?screen_name=BTDHTSearch', '',  'menubar=no,toolbar=no,width=530,height=550,resizable=yes').focus();return false;"
+  href="https://twitter.com/BTDHTSearch" data-show-screen-name="false">
+</a>
+{% endif %}
+</div>
 {% endblock %}
 
 
@@ -33,15 +47,46 @@
 {% endif %}
 {% include "btdht_search/torrent_table.html" %}
 {% endblock %}
-
+{% block javascript %}{% if settings.BTDHT_FACEBOOK_PAGE %}<div id="fb-root"></div>{% endif %}{% endblock %}
 {% block javascript_inline %}{% if torrents %}
 $(document).ready(function () {
     $(".pagination").rPage();
     init_search_fav()
 });
+
 {% endif %}
 $('#id_query').autocomplete({
       source: "{% url "btdht_search:autocomplete" %}",
       minLength: 1,
 });
+
+{% if settings.BTDHT_FACEBOOK_PAGE %}
+//facebook
+(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) return;
+  js = d.createElement(s); js.id = id;
+  js.src = "//connect.facebook.net/fr_FR/sdk.js#xfbml=1&version=v2.8";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));
+{% endif %}
+{% if settings.BTDHT_TWITTER_NAME %}
+// twitter
+window.twttr = (function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0],
+    t = window.twttr || {};
+  if (d.getElementById(id)) return t;
+  js = d.createElement(s);
+  js.id = id;
+  js.src = "https://platform.twitter.com/widgets.js";
+  fjs.parentNode.insertBefore(js, fjs);
+
+  t._e = [];
+  t.ready = function(f) {
+    t._e.push(f);
+  };
+
+  return t;
+}(document, "script", "twitter-wjs"));
+{% endif %}
 {% endblock %}

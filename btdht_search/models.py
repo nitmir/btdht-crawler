@@ -413,7 +413,8 @@ class Torrent(object):
                     urlquote(utils.absolute_url(self._request, url)),
                 ),
                 "js": None,
-                "txt": "Reddit this",
+                "txt": "Share on Reddit",
+                "icon": "reddit-alien",
             }),
         ]
 
