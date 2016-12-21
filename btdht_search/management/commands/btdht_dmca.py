@@ -9,21 +9,20 @@
 # Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
 # (c) 2016 Valentin Samir
-from django.core.management.base import BaseCommand, CommandError
-from django.core.urlresolvers import reverse
+from django.core.management.base import BaseCommand
 
-import sys
 import re
 import binascii
 import argparse
 
-from ...settings import settings
 from ...utils import dmca_ban, dmca_unban
+
 
 def check_hex_hash(value):
     if not re.match("[0-9A-Za-z]{40}", value):
         raise argparse.ArgumentTypeError("%r is not a valid torrent hash" % value)
     return value
+
 
 class Command(BaseCommand):
     args = ''
@@ -48,7 +47,5 @@ class Command(BaseCommand):
             dmca_ban(binascii.a2b_hex(options["ban"]))
             print("%s banned" % options["ban"])
         if options["unban"]:
-            dmca_ban(binascii.a2b_hex(options["unban"]))
+            dmca_unban(binascii.a2b_hex(options["unban"]))
             print("%s unbanned" % options["unban"])
-
-

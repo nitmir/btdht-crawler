@@ -9,12 +9,10 @@
 # Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
 # (c) 2016 Valentin Samir
-from django.core.management.base import BaseCommand, CommandError
-from django.core.urlresolvers import reverse
+from django.core.management.base import BaseCommand
 
 import sys
 import re
-import time
 import email
 import urlparse
 try:
@@ -22,10 +20,9 @@ try:
 except ImportError:
     imaplib2 = None
 import binascii
-from bson.binary import Binary
 
 from ...settings import settings
-from ...utils import getdb, dmca_ban
+from ...utils import dmca_ban
 
 
 URL_RE = re.compile(
@@ -34,11 +31,13 @@ URL_RE = re.compile(
     """([^\\s()<>]+\\)))*\\)|[^\\s`!()\\[\\]{};:'".,<>?«»""'']))"""
 )
 
+
 URL_HASH_RE = re.compile(".*/([0-9A-Fa-f]{40})/.*")
 
 
 class Break(Exception):
     pass
+
 
 def decode_dkim_header(data):
     result = {}
@@ -48,6 +47,7 @@ def decode_dkim_header(data):
     result['h'] = [h.lower() for h in result.get('h', "").split(':')]
     return result
 
+
 class DMCA(object):
 
     imap = None
@@ -56,7 +56,6 @@ class DMCA(object):
         self.imap = imaplib2.IMAP4_SSL(settings.BTDHT_DMCA_EMAIL_SERVER)
         self.imap.login(settings.BTDHT_DMCA_EMAIL_USERNAME, settings.BTDHT_DMCA_EMAIL_PASSWORD)
         self.imap.select(settings.BTDHT_DMCA_EMAIL_MAILBOX)
-
 
     def fetch(self, id_):
         status, response = self.imap.fetch(id_, '(RFC822)')
@@ -69,43 +68,45 @@ class DMCA(object):
             self.imap.store(id_, '+FLAGS', '\\Deleted')
 
     def get_url(self, id_):
-       urls = set()
-       mail = self.fetch(id_)
-       if (
-           settings.BTDHT_DMCA_EMAIL_DKIM and
-           (
-               not mail['Authentication-Results'] or
-               not 'dkim=pass' in mail['Authentication-Results']
-           )
-       ):
-           sys.stderr.write("dkim failed, ignore mail id %s\n" % id_)
-           return
-       try:
-           for header_name, header_values in settings.BTDHT_DMCA_EMAIL_ALLOWED_HEADERS.items():
-               for header_value in header_values:
-                   if mail[header_name] == header_value:
-                       if settings.BTDHT_DMCA_EMAIL_DKIM:
-                           dkim = decode_dkim_header(mail['DKIM-Signature'])
-                           if header_name.lower() in dkim['h']:
-                               raise Break()
-                       else:
-                           raise Break()
-       except Break:
-           pass
-       else:
-           sys.stderr.write("no allowed header found or not protected with dkim, ignore mail id %s\n" % id_)
-           return
-       if mail.is_multipart():
-           parts = mail.get_payload()
-       else:
-           parts = [mail]
-       for part in parts:
-           data = part.get_payload(decode=True)
-           for url in URL_RE.findall(data):
-               url = url[0]
-               if urlparse.urlparse(url).netloc in settings.ALLOWED_HOSTS:
-                   urls.add(url)
-       return urls
+        urls = set()
+        mail = self.fetch(id_)
+        if (
+            settings.BTDHT_DMCA_EMAIL_DKIM and
+            (
+                not mail['Authentication-Results'] or
+                'dkim=pass' not in mail['Authentication-Results']
+            )
+        ):
+            sys.stderr.write("dkim failed, ignore mail id %s\n" % id_)
+            return
+        try:
+            for header_name, header_values in settings.BTDHT_DMCA_EMAIL_ALLOWED_HEADERS.items():
+                for header_value in header_values:
+                    if mail[header_name] == header_value:
+                        if settings.BTDHT_DMCA_EMAIL_DKIM:
+                            dkim = decode_dkim_header(mail['DKIM-Signature'])
+                            if header_name.lower() in dkim['h']:
+                                raise Break()
+                        else:
+                            raise Break()
+        except Break:
+            pass
+        else:
+            sys.stderr.write(
+                "no allowed header found or not protected with dkim, ignore mail id %s\n" % id_
+            )
+            return
+        if mail.is_multipart():
+            parts = mail.get_payload()
+        else:
+            parts = [mail]
+        for part in parts:
+            data = part.get_payload(decode=True)
+            for url in URL_RE.findall(data):
+                url = url[0]
+                if urlparse.urlparse(url).netloc in settings.ALLOWED_HOSTS:
+                    urls.add(url)
+        return urls
 
     def get_hash(self, id_):
         hashes = set()
@@ -116,7 +117,6 @@ class DMCA(object):
                 if match is not None:
                     hashes.add(match.group(1))
             return hashes
-
 
     def ban(self):
         try:
@@ -134,8 +134,6 @@ class DMCA(object):
                     self.archive(id_)
         finally:
             self.imap.expunge()
-
-        
 
     def get_all_mail_id(self):
         status, data = self.imap.search('UTF-8', 'ALL')
@@ -156,6 +154,7 @@ class DMCA(object):
             if hashes_ is not None:
                 hashes = hashes | hashes_
         return hashes
+
 
 class Command(BaseCommand):
     args = ''
@@ -200,5 +199,3 @@ class Command(BaseCommand):
                 d.ban()
         finally:
             d.imap.logout()
-
-

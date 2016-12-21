@@ -252,7 +252,10 @@ class Torrent(object):
             search_query = {"$and": [search_query, {'categories': const.categories[category-1]}]}
         results = db.find(search_query, {"score": {"$meta": "textScore"}, 'files': False})
         if re.match("^[0-9A-Fa-f]{40}$", query) and results.count() == 0:
-            results = getdb("torrents_ban").find({'_id': Binary(query.decode("hex"))}, {"score": {"$meta": "textScore"}, 'files': False})
+            results = getdb("torrents_ban").find(
+                {'_id': Binary(query.decode("hex"))},
+                {"score": {"$meta": "textScore"}, 'files': False}
+            )
         return TorrentsList(
             results,
             url=lambda page: reverse(
@@ -357,18 +360,23 @@ class Torrent(object):
     @property
     def url(self):
         if os.path.isfile(self.path):
-            return reverse("btdht_search:download_torrent", args=[self.hex_hash, normalize_name(self.name)])
+            return reverse(
+                "btdht_search:download_torrent",
+                args=[self.hex_hash, normalize_name(self.name)]
+            )
         else:
             return None
 
     @property
     def info_url(self):
-        return reverse("btdht_search:info_torrent", args=[self.hex_hash, normalize_name(self.name)])
+        return reverse(
+            "btdht_search:info_torrent",
+            args=[self.hex_hash, normalize_name(self.name)]
+        )
 
     @property
     def info_url_noname(self):
         return reverse("btdht_search:info_torrent", args=[self.hex_hash])
-
 
     def social_share_urls(self):
         url = self.info_url
@@ -435,13 +443,12 @@ class Torrent(object):
 
     @property
     def created_delta_pp(self):
-        delta =  timedelta(seconds=int(time.time()) - self.created)
+        delta = timedelta(seconds=int(time.time()) - self.created)
         total_seconds = int(delta.total_seconds())
         if total_seconds < 60:
             return "%ss ago" % total_seconds
         elif total_seconds < 3600:
             minutes = total_seconds // 60
-            seconds = total_seconds - minutes * 60
             return "%smin ago" % (minutes)
         elif total_seconds < 3600 * 24:
             hours = total_seconds // 3600
@@ -451,7 +458,6 @@ class Torrent(object):
             days = total_seconds // (3600 * 24)
             hours = (total_seconds - days * 3600 * 24) // 3600
             minutes = (total_seconds - hours * 3600 - days * 3600 * 24) // 60
-            seconds = total_seconds - minutes * 60 - hours * 3600 - days * 3600 * 24
             return "%s days, %sh %smin ago" % (days, hours, minutes)
 
     def categories_pp(self):

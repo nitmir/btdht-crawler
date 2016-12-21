@@ -148,7 +148,7 @@ def scrape_udp(parsed_trackers, hashes, timeout=1):
                         try:
                             sock.sendto(req, froms)
                             transaction_ids[transaction_id] = (2, time.time(), tracker, hash_id+1)
-                        except socket.error as error:
+                        except socket.error:
                             pass
         else:
             for transaction_id, (_, start_time, _, _) in transaction_ids.items():
@@ -218,7 +218,8 @@ def udp_parse_error(buf, sent_transaction_id):
         msg = buf[8:]
         return msg
     else:
-        raise  RuntimeError("Not and error response")
+        raise RuntimeError("Not and error response")
+
 
 def udp_parse_connection_response(buf, sent_transaction_id):
     if len(buf) < 16:

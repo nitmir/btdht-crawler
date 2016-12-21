@@ -88,6 +88,7 @@ def index(request, page=1, query=None, order_by=const.ORDER_BY_SCORE, asc='1', c
         )
     )
 
+
 @require_safe
 def autocomplete(request):
     query = utils.normalize_search_archive(request.GET.get("term", ""))
@@ -97,11 +98,12 @@ def autocomplete(request):
     results = db.aggregate([
         {'$match': {'query': {'$gte': query, '$lt': query[:-1] + chr(ord(query[-1]) + 1)}}},
         {'$group': {'_id': '$query', 'count': {'$sum': 1}}},
-        {'$match': {'count': {'$gte': 2}}},
+        # {'$match': {'count': {'$gte': 2 if len(query) <= 4 else 1}}},
         {'$sort': {'count': -1}},
         {'$limit': 8}
     ])
     return render_json([r['_id'] for r in results])
+
 
 @require_safe
 def api_search(request, page=1, query=None, order_by=const.ORDER_BY_SCORE, asc='1', category=0):
@@ -157,7 +159,13 @@ def info_torrent(request, hex_hash, name=None):
     elif name != torrent.name and name != normalize_name(torrent.name):
         raise Http404()
     elif torrent.dmca_deleted is not None:
-        return render(request, "btdht_search/torrent_ban.html", context(request, {'torrent': torrent}))
+        response = render(
+            request,
+            "btdht_search/torrent_ban.html",
+            context(request, {'torrent': torrent})
+        )
+        response["X-Robots-Tag"] = "noindex"
+        return response
     elif request.method == "POST" and 'scrape' in request.POST:
         torrent.scrape()
         return redirect("btdht_search:info_torrent", hex_hash, name)
@@ -165,6 +173,7 @@ def info_torrent(request, hex_hash, name=None):
         if torrent.last_scrape == 0:
             torrent.scrape()
         return render(request, "btdht_search/torrent.html", context(request, {'torrent': torrent}))
+
 
 @require_safe
 def api_info_torrent(request, hex_hash):
@@ -207,7 +216,15 @@ def api_recent(request, page=1):
 def stats(request):
     db = getdb("torrents_stats")
     timezone = request.COOKIES.get('timezone', 'UTC')
-    results = db.find({'_id': {'$gte': time.mktime(datetime.fromtimestamp(time.time() - 30 * 24 * 3600).date().timetuple())}}).sort([('_id', 1)])
+    results = db.find(
+        {
+            '_id': {
+                '$gte': time.mktime(
+                    datetime.fromtimestamp(time.time() - 30 * 24 * 3600).date().timetuple()
+                )
+            }
+        }
+    ).sort([('_id', 1)])
     torrent_indexed = []
     categories = collections.defaultdict(list)
     times = []
@@ -229,7 +246,18 @@ def stats(request):
         times.append(x)
         torrent_indexed.append({'x': x, 'y': result["torrent_indexed"]})
         if torrent_rate_last and result['_id'] >= last_week:
-            torrent_rate.append({'x': x, 'y': round((int(result["torrent_indexed"]) - torrent_rate_last["y"]) / (float(result['_id']) - torrent_rate_last['x']) * 60, 2)})
+            torrent_rate.append(
+                {
+                    'x': x,
+                    'y': round(
+                        (
+                            (int(result["torrent_indexed"]) - torrent_rate_last["y"]) /
+                            (float(result['_id']) - torrent_rate_last['x']) * 60
+                        ),
+                        2
+                    )
+                }
+            )
             if result['_id'] >= last_day:
                 torrent_rate_av_list.append(torrent_rate[-1]['y'])
         torrent_rate_last = {'x': float(result['_id']), 'y': int(result["torrent_indexed"])}
@@ -332,7 +360,14 @@ def robots_txt(request):
 def dmca(request):
     db = getdb("torrents_ban")
     results = db.find({}, {'files': False}).sort([("dmca_deleted", -1), ('name', 1), ('_id', 1)])
-    return render(request, "btdht_search/dmca.html", context(request, {'results': [Torrent(obj=obj, no_files=True, request=request) for obj in results]}))
+    torrents = [Torrent(obj=obj, no_files=True, request=request) for obj in results]
+    response = render(
+        request,
+        "btdht_search/dmca.html",
+        context(request, {'results': torrents})
+    )
+    response["X-Robots-Tag"] = "noindex"
+    return response
 
 
 @require_http_methods(["GET", "HEAD", "POST"])
@@ -350,6 +385,10 @@ def legal(request):
     else:
         display = True
         form = None
-    response = render(request, settings.BTDHT_LEGAL_TEMPLATE, context(request, {'form': form, 'display': display}))
+    response = render(
+        request,
+        settings.BTDHT_LEGAL_TEMPLATE,
+        context(request, {'form': form, 'display': display})
+    )
     response["X-Robots-Tag"] = "noindex"
     return response

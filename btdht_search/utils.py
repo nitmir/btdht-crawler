@@ -39,6 +39,7 @@ import const
 
 geoip2 = GeoIP2()
 
+
 def token_auth(view):
     @wraps(view)
     def wrap(request, token, *args, **kwargs):
@@ -53,6 +54,7 @@ def token_auth(view):
 
 def random_token():
     return hashlib.md5(os.urandom(16)).hexdigest()
+
 
 def context(request, params):
     """
@@ -187,14 +189,15 @@ def normalize_name(name):
 def normalize_search_archive(query):
     return " ".join(re.sub("[^\w]", " ",  query).split()).lower()
 
+
 def normalize_ip_archive(ip):
     try:
         ip = netaddr.IPAddress(ip)
         if ip.version == 4:
             return ip.format()
         elif ip.version == 6:
-           net = netaddr.IPNetwork("%s/64" % ip)
-           return net.network.format()
+            net = netaddr.IPNetwork("%s/64" % ip)
+            return net.network.format()
         else:
             return ""
     except netaddr.AddrFormatError:

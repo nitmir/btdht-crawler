@@ -26,7 +26,10 @@ urlpatterns = [
         name='download_torrent'
     ),
     url(
-        'api/auth/^(?P<token>[0-9A-Fa-f]{32})/download/(?P<hex_hash>[0-9A-Fa-f]{40})/(?P<name>.*)\.torrent$',
+        (
+            'api/auth/^(?P<token>[0-9A-Fa-f]{32})/download/'
+            '(?P<hex_hash>[0-9A-Fa-f]{40})/(?P<name>.*)\.torrent$'
+        ),
         token_auth(views.download_torrent),
         name='download_torrent'
     ),

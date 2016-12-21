@@ -8,7 +8,7 @@ import struct
 import collections
 import multiprocessing
 from threading import Thread
-from btdht import DHT, ID, RoutingTable
+from btdht import DHT, ID
 from btdht.utils import enumerate_ids, Scheduler
 
 import pymongo
@@ -19,8 +19,11 @@ import config
 import resource
 import torrent
 
+
 class SharedObject(object):
-	pass
+    pass
+
+
 class HashToIgnore(object):
     hash_to_ignore = set()
     hash_not_to_ignore = collections.defaultdict(int)
@@ -101,7 +104,6 @@ class Crawler(DHT):
         self.hash_to_fetch_totry = collections.defaultdict(set)
 
         # calling parent method
-        #super(Crawler, self).start(start_routing_table=False)
         super(Crawler, self).start()
 
         # starting threads
@@ -227,11 +229,6 @@ class Crawler(DHT):
                 except KeyError:
                     pass
 
-        #self.save(
-        #    os.path.join(config.data_dir, "dht_%s.status" % self.myid.value.encode("hex")),
-        #    max_node=100
-        #)
-
     def on_get_peers_response(self, query, response):
         if response.get("values"):
             info_hash = query.get("info_hash")
@@ -339,7 +336,6 @@ def lauch(debug, id_file="crawler1.id", lprefix="", worker_alive=None):
     port_base = config.crawler_base_port
     prefix = 1
     scheduler = Scheduler()
-#    routing_table = RoutingTable(debuglvl=debug, scheduler=scheduler)
     share = SharedObject()
     dht_base = Crawler(
         bind_port=port_base + ord(id_base[0]),
@@ -347,7 +343,6 @@ def lauch(debug, id_file="crawler1.id", lprefix="", worker_alive=None):
         debuglvl=debug,
         prefix="%s%02d:" % (lprefix, prefix),
         master=True,
-#        routing_table=routing_table,
         ignored_ip=config.ignored_ip,
         ignored_net=config.ignored_net,
         scheduler=scheduler,
@@ -362,7 +357,6 @@ def lauch(debug, id_file="crawler1.id", lprefix="", worker_alive=None):
             Crawler(
                 bind_port=port_base + ord(id[0]),
                 id=ID(id),
-#                routing_table=routing_table,
                 debuglvl=debug,
                 prefix="%s%02d:" % (lprefix, prefix),
                 ignored_ip=config.ignored_ip,
@@ -371,7 +365,6 @@ def lauch(debug, id_file="crawler1.id", lprefix="", worker_alive=None):
                 share=share
             )
         )
-#    liveness.append(routing_table)
 
     stoped = False
     try:
@@ -380,14 +373,6 @@ def lauch(debug, id_file="crawler1.id", lprefix="", worker_alive=None):
                 raise Exception("Stoped")
             liv.start()
             time.sleep(1.4142135623730951 * 0.1)
-        print "%sloading routing table" % lprefix
-        #dht_base.load(
-        #for dht in liveness:
-        #    dht.load(
-        #        os.path.join(config.data_dir, "dht_%s.status" % dht_base.myid.value.encode("hex")),
-        #        max_node=100
-        #    )
-        print "%srouting table loaded" % lprefix
         while True:
             for liv in liveness:
                 if stoped:
@@ -404,11 +389,6 @@ def lauch(debug, id_file="crawler1.id", lprefix="", worker_alive=None):
     except (KeyboardInterrupt, Exception) as e:
         print("%r" % e)
         stop(liveness)
-        #for dht in liveness:
-            #dht.save(
-            #    os.path.join(config.data_dir, "dht_%s.status" % dht_base.myid.value.encode("hex")),
-            #    max_node=4000
-            #)
         print("exit")
 
 
@@ -435,7 +415,12 @@ def worker(debug):
         for i in range(1, config.crawler_worker + 1):
             jobs[i] = multiprocessing.Process(
                 target=lauch,
-                args=(debug, os.path.join(config.data_dir, "crawler%s.id" % i), "W%s:" % i, worker_alive)
+                args=(
+                    debug,
+                    os.path.join(config.data_dir, "crawler%s.id" % i),
+                    "W%s:" % i,
+                    worker_alive
+                )
             )
             jobs[i].daemon = True
             jobs[i].start()
