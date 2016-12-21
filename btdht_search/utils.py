@@ -18,6 +18,7 @@ from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse
 from django.contrib.auth import login
 from django.contrib.gis.geoip2 import GeoIP2
+from django.utils.http import urlquote
 
 import os
 import pymongo
@@ -174,8 +175,12 @@ def absolute_url(request, path):
 
 def normalize_name(name):
     name = name.replace('\r\n', ' ')
-    name = name.replace('\n', '')
+    name = name.replace('\n', ' ')
     name = name.replace('\r', '')
+    name = name.replace('/', '\\')
+    name = name[:427]
+    while len(urlquote(name)) > 500:
+        name = name[:-1]
     return name
 
 
