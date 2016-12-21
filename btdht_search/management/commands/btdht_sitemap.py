@@ -21,6 +21,9 @@ from ...settings import settings
 from ...utils import getdb, normalize_name, format_date
 
 
+MAX_SIZE = 35000
+
+
 class Command(BaseCommand):
     args = ''
     help = u"Build/update the btdht sitemaps"
@@ -54,20 +57,21 @@ class Command(BaseCommand):
     def gen_static(self):
         print "Generating static sitemap"
         urls = [
-            reverse("btdht_search:index"),
-            reverse("btdht_search:stats"),
-            reverse("btdht_search:api"),
-            reverse("btdht_search:about"),
+            (reverse("btdht_search:index"), "weekly"),
+            (reverse("btdht_search:stats"), "hourly"),
+            (reverse("btdht_search:api"), "weekly"),
+            (reverse("btdht_search:about"), "weekly"),
+            (reverse("btdht_search:dmca"), "hourly"),
         ]
         with gzip.open(os.path.join(settings.BTDHT_SITEMAP_DIR, "static.xml.new.gz"), 'w') as f:
             f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
             f.write('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n')
-            for url in urls:
+            for (url, freq) in urls:
                 f.write('<url><loc>')
                 f.write(escape(settings.BTDHT_SITEMAP_BASEURL))
                 f.write(escape(url))
                 f.write('</loc>')
-                f.write('<changefreq>weekly</changefreq>')
+                f.write('<changefreq>%s</changefreq>' % freq)
                 f.write('</url>\n')
             f.write('</urlset>')
         os.rename(
@@ -135,8 +139,8 @@ class Command(BaseCommand):
         ).sort(
             [('added', 1)]
         ).skip(
-            50000 * (page - 1)
-        ).limit(50000)
+            MAX_SIZE * (page - 1)
+        ).limit(MAX_SIZE)
         while req.count(with_limit_and_skip=True) > 0:
             print "Generating sitemap %s" % page
             with gzip.open(
@@ -182,8 +186,8 @@ class Command(BaseCommand):
             ).sort(
                 [('added', 1)]
             ).skip(
-                50000 * (page - 1)
-            ).limit(50000)
+                MAX_SIZE * (page - 1)
+            ).limit(MAX_SIZE)
 
     def gen_index(self, *args, **options):
         print "Generating sitemap index"
