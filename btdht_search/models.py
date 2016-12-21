@@ -19,7 +19,7 @@ import const
 
 class UserPref(models.Model):
 
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, unique=True)
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, unique=True, on_delete=models.CASCADE)
     token = models.CharField(max_length=32, unique=True, default=random_token)
 
 
