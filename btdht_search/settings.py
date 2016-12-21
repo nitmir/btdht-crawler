@@ -22,17 +22,19 @@ BTDHT_FAVICON_URL = static("btdht_search/favicon.png")
 BTDHT_SHOW_POWERED = True
 #: URLs to css and javascript external components.
 BTDHT_COMPONENT_URLS = {
-    "bootstrap3_css": "//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css",
-    "bootstrap3_js": "//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js",
-    "datatable_js": "//cdn.datatables.net/1.10.12/js/jquery.dataTables.min.js",
-    "datatable_css": "//cdn.datatables.net/1.10.12/css/dataTables.bootstrap.min.css",
-    "datatable_filesize": "//cdn.datatables.net/plug-ins/1.10.12/sorting/file-size.js",
-    # "fontawesome": "//maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css",
-    "html5shiv": "//oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js",
-    "respond": "//oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js",
-    "jquery": "//code.jquery.com/jquery.min.js",
+    "bootstrap3_css": "https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css",
+    "bootstrap3_js": "https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js",
+    "fontawesome": "https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.css",
+    "datatable_js": "https://cdn.datatables.net/1.10.12/js/jquery.dataTables.min.js",
+    "datatable_css": "https://cdn.datatables.net/1.10.12/css/dataTables.bootstrap.min.css",
+    "datatable_filesize": "https://cdn.datatables.net/plug-ins/1.10.12/sorting/file-size.js",
+    "html5shiv": "https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js",
+    "respond": "https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js",
+    "jquery": "https:////code.jquery.com/jquery.min.js",
     "jquery_cookie": "https://cdnjs.cloudflare.com/ajax/libs/jquery-cookie/1.4.1/jquery.cookie.js",
-    "chart_js": "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.3.0/Chart.bundle.min.js",
+    "jqueryui_css": "https://code.jquery.com/ui/1.12.0/themes/smoothness/jquery-ui.css",
+    "jqueryui_js": "https://code.jquery.com/ui/1.12.1/jquery-ui.min.js",
+    "chart_js": "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.3.0/Chart.bundle.js",
     "jstz": "https://cdnjs.cloudflare.com/ajax/libs/jstimezonedetect/1.0.6/jstz.js",
 }
 
@@ -102,6 +104,8 @@ BTDHT_LEGAL_HOSTING_PROVIDER = None
 
 BTDHT_LEGAL_ENABLE = True
 
+
+BTDHT_SOCIAL_SHARE = ["twitter", "facebook", "google", "reddit"]
 
 GLOBALS = globals().copy()
 for name, default_value in GLOBALS.items():

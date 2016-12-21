@@ -48,7 +48,7 @@ $(document).ready(function(){
 <tr><th>Info Hash</th><td>{{torrent.hex_hash.upper}}</td></tr>
 </table>
 </div>
-{% if settings.BTDHT_ADS_TEMPLATE and not on_tor %}{% include settings.BTDHT_ADS_TEMPLATE %}{% endif %}
+{% if settings.BTDHT_ADS_TEMPLATE %}{% include settings.BTDHT_ADS_TEMPLATE %}{% endif %}
 {% if request.user.is_authenticated %}
 {% comment %}<h2>Download Links</h2>{% endcomment %}
 <div class="container">

@@ -8,6 +8,7 @@
         {% block extra_pre_head %}{% endblock %}
         <link rel="stylesheet" href="{{settings.BTDHT_COMPONENT_URLS.jqueryui_css}}">
         <link href="{{settings.BTDHT_COMPONENT_URLS.bootstrap3_css}}" rel="stylesheet">
+        <link href="{{settings.BTDHT_COMPONENT_URLS.fontawesome}}" rel="stylesheet">
         <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
         <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
         <!--[if lt IE 9]>
@@ -16,6 +17,7 @@
         <![endif]-->
         {% if settings.BTDHT_FAVICON_URL %}<link rel="shortcut icon" href="{{settings.BTDHT_FAVICON_URL}}" />{% endif %}
         {% block extra_head %}{% endblock %}
+        <link href="{% static "btdht_search/bootstrap-social.css" %}" rel="stylesheet">
         <link href="{% static "btdht_search/styles.css" %}" rel="stylesheet">
     </head>
     <body>
@@ -42,6 +44,7 @@
       <script src="{{settings.BTDHT_COMPONENT_URLS.jqueryui_js}}"></script>
       <script src="{{settings.BTDHT_COMPONENT_URLS.jquery_cookie}}"></script>
       <script src="{{settings.BTDHT_COMPONENT_URLS.bootstrap3_js}}"></script>
+      <script src="{% static "cookielaw/js/cookielaw.js" %}"></script>
       <script src="{% static "btdht_search/responsive-paginate.js" %}"></script>
       <script src="{% static "btdht_search/favorites.js" %}"></script>
       {% block javascript %}{% endblock %}

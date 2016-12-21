@@ -39,25 +39,19 @@ $(document).ready(function(){
 {% if torrent.categories %}
 <tr><th>{% if torrent.categories|length > 1 %}Categories{% else %}Category{% endif %}</th><td>{{torrent.categories_pp}}</td></tr>
 {% endif %}
-<tr><th>Uploaded</th><td>{{torrent.created_pp}}{% if request.COOKIES.timezone is None %} UTC{% endif %}</td></tr>
+<tr><th>Uploaded</th><td>
+{% if torrent.created_delta < 86400 %}
+<span title="{{torrent.created_pp}}">{{torrent.created_delta_pp}}</span>
+{% else %}
+{{torrent.created_pp}}<span title="{{torrent.created_delta_pp}}">{% if request.COOKIES.timezone is None %} UTC{% endif %}</span>
+{% endif %}
+</td></tr>
 <tr><th>Info Hash</th><td>{{torrent.hex_hash.upper}}</td></tr>
 </table>
 </div>
-<h2>Torrent status</h2>
-<p class="pull-left">Last scrape at {{torrent.last_scrape_pp}}.</p>
-<form method="post" class="pull-left">
-{% csrf_token %}
-<input type="hidden" name="scrape" value="1"/>
-<a href="#" onclick="$(this).closest('form').submit();"><span class="glyphicon glyphicon-refresh"></span></a>
-</form>
-<table class="table">
-<tr><th>Seeders</th><td>{{torrent.seeds}}</td></tr>
-<tr><th>Leechers</th><td>{{torrent.peers}}</td></tr>
-<tr><th>Completed</th><td>{{torrent.complete}}</td></tr>
-</table>
 {% if settings.BTDHT_ADS_TEMPLATE %}{% include settings.BTDHT_ADS_TEMPLATE %}{% endif %}
 {% if not settings.BTDHT_HIDE_MAGNET_FROM_UNAUTH or not settings.BTDHT_HIDE_TORRENT_LINK_FROM_UNAUTH or request.user.is_authenticated %}
-<h2>Download Links</h2>
+{% comment %}<h2>Download Links</h2>{% endcomment %}
 <div class="container">
 <div class="row">
   <div class="col-lg-3 col-md-3 col-sm-2 col-xs-0"></div>
@@ -85,6 +79,34 @@ $(document).ready(function(){
 </div>
 </div>
 {% endif %}
+<div class="text-center">
+{% if settings.BTDHT_SOCIAL_SHARE %}
+{% for name, share in torrent.social_share_urls %}
+{% if name in settings.BTDHT_SOCIAL_SHARE %}
+  <a
+    class="btn btn-{{name}}"
+    rel="nofollow"
+    target="_blank"
+    href="{{share.url|safe}}"
+    title="{{share.txt}}"
+    {% if share.js %}onclick="{{share.js|safe}}"{% endif %}
+  ><span class="fa fa-{{name}}"></span> {{share.txt}}</a>
+{% endif %}
+{% endfor %}
+{% endif %}
+</div>
+<h2>Torrent status</h2>
+<p class="pull-left">Last scrape at {{torrent.last_scrape_pp}}.</p>
+<form method="post" class="pull-left">
+{% csrf_token %}
+<input type="hidden" name="scrape" value="1"/>
+<a href="#" onclick="$(this).closest('form').submit();"><span class="glyphicon glyphicon-refresh"></span></a>
+</form>
+<table class="table">
+<tr><th>Seeders</th><td>{{torrent.seeds}}</td></tr>
+<tr><th>Leechers</th><td>{{torrent.peers}}</td></tr>
+<tr><th>Completed</th><td>{{torrent.complete}}</td></tr>
+</table>
 {% if torrent.files %}
 <h2 id="torrent_files">Torrent Files</h2>
 <table class="table table-striped table-condensed table-responsive" id="files_table">

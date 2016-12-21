@@ -82,9 +82,13 @@
   {% endif %}
   </td>
   <td class="text-nowrap">{{t.categories.0}}</td>
-  <td class="full-width"><a href="{% url "btdht_search:info_torrent" t.hex_hash t.name %}">{{t.name}}</a></td>
+  <td class="full-width"><a href="{% url "btdht_search:info_torrent" t.hex_hash t.name_normalized %}">{{t.name}}</a></td>
   <td class="text-nowrap">{{t.size_pp}}</td>
-  <td class="text-nowrap">{{t.created_pp}}</td>
+  {% if t.created_delta < 86400 %}
+  <td class="text-nowrap" title="{{t.created_pp}}">{{t.created_delta_pp}}</td>
+  {% else %}
+  <td class="text-nowrap" title="{{t.created_delta_pp}}">{{t.created_pp}}</td>
+  {% endif %}
   <td class="text-nowrap">{{t.file_nb}}</td>
   <td class="text-nowrap">{% if t.seeds is not None %}{{t.seeds}}{% endif %}</td>
   <td class="text-nowrap">{% if t.peers is not None %}{{t.peers}}{% endif %}</td>

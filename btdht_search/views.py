@@ -122,7 +122,7 @@ def download_torrent(request, hex_hash, name):
         torrent = Torrent(hex_hash.decode("hex"), request=request)
     except ValueError:
         raise Http404()
-    if name != torrent.name:
+    if name != torrent.name and name != normalize_name(torrent.name):
         raise Http404()
     path = torrent.path
     if not os.path.isfile(path):
@@ -150,7 +150,9 @@ def info_torrent(request, hex_hash, name=None):
         torrent = Torrent(hex_hash.decode("hex"), request=request)
     except ValueError:
         raise Http404()
-    if name != torrent.name and name != normalize_name(torrent.name):
+    if not name:
+        return redirect("btdht_search:info_torrent", hex_hash, normalize_name(torrent.name))
+    elif name != torrent.name and name != normalize_name(torrent.name):
         raise Http404()
     elif torrent.dmca_deleted is not None:
         return render(request, "btdht_search/torrent_ban.html", context(request, {'torrent': torrent}))
@@ -192,7 +194,7 @@ def api_recent(request, page=1):
     page = int(page)
     if page < 1:
         raise Http404()
-    torrents = Torrent.recent(page)
+    torrents = Torrent.recent(page, request=request)
     if page > torrents.last_page:
         raise Http404()
     return render_json(torrents.data(request))

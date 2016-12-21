@@ -3,6 +3,7 @@ from .settings import settings
 
 from django.db import models
 from django.core.urlresolvers import reverse
+from django.utils.http import urlquote
 
 import os
 import urllib
@@ -11,7 +12,8 @@ import re
 from datetime import timedelta
 from bson.binary import Binary
 
-from .utils import getdb, format_size, format_date, scrape, random_token
+import utils
+from .utils import getdb, format_size, format_date, scrape, random_token, normalize_name
 import const
 
 
@@ -355,9 +357,57 @@ class Torrent(object):
     @property
     def url(self):
         if os.path.isfile(self.path):
-            return reverse("btdht_search:download_torrent", args=[self.hex_hash, self.name])
+            return reverse("btdht_search:download_torrent", args=[self.hex_hash, normalize_name(self.name)])
         else:
             return None
+
+    @property
+    def info_url(self):
+        return reverse("btdht_search:info_torrent", args=[self.hex_hash, normalize_name(self.name)])
+
+    @property
+    def info_url_noname(self):
+        return reverse("btdht_search:info_torrent", args=[self.hex_hash])
+
+
+    def social_share_urls(self):
+        url = self.info_url
+        url_noname = self.info_url_noname
+        js_template = (
+            "window.open(this.getAttribute('href'), '',  "
+            "'menubar=no,toolbar=no,width=%s,height=%s,resizable=yes').focus();return false;"
+        )
+        return [
+            ('twitter', {
+                "url": "https://twitter.com/intent/tweet?text=%s&url=%s" % (
+                    urlquote("Check out the #torrent I found on #BTDHTSearch !"),
+                    urlquote(utils.absolute_url(self._request, url))
+                ),
+                "js": js_template % (500, 350),
+                "txt": "Share on Twitter",
+            }),
+            ('facebook', {
+                "url": "https://www.facebook.com/share.php?u=%s" % (
+                    urlquote(utils.absolute_url(self._request, url)),
+                ),
+                "js": js_template % (570, 400),
+                "txt": "Share on Facebook",
+            }),
+            ('google', {
+                "url": "https://plus.google.com/share?url=%s" % (
+                    urlquote(utils.absolute_url(self._request, url_noname)),
+                ),
+                "js": js_template % (500, 500),
+                "txt": "Share on Google+",
+            }),
+            ('reddit', {
+                "url": "https://www.reddit.com/submit?url=%s" % (
+                    urlquote(utils.absolute_url(self._request, url)),
+                ),
+                "js": None,
+                "txt": "Reddit this",
+            }),
+        ]
 
     @property
     def size_pp(self):
@@ -381,10 +431,35 @@ class Torrent(object):
 
     @property
     def created_delta(self):
-        return timedelta(seconds=int(time.time()) - self.created)
+        return time.time() - self.created
+
+    @property
+    def created_delta_pp(self):
+        delta =  timedelta(seconds=int(time.time()) - self.created)
+        total_seconds = int(delta.total_seconds())
+        if total_seconds < 60:
+            return "%ss ago" % total_seconds
+        elif total_seconds < 3600:
+            minutes = total_seconds // 60
+            seconds = total_seconds - minutes * 60
+            return "%smin ago" % (minutes)
+        elif total_seconds < 3600 * 24:
+            hours = total_seconds // 3600
+            minutes = (total_seconds - hours * 3600) // 60
+            return "%sh %smin ago" % (hours, minutes)
+        else:
+            days = total_seconds // (3600 * 24)
+            hours = (total_seconds - days * 3600 * 24) // 3600
+            minutes = (total_seconds - hours * 3600 - days * 3600 * 24) // 60
+            seconds = total_seconds - minutes * 60 - hours * 3600 - days * 3600 * 24
+            return "%s days, %sh %smin ago" % (days, hours, minutes)
 
     def categories_pp(self):
         if self.categories:
             return ", ".join(self.categories)
         else:
             return ""
+
+    @property
+    def name_normalized(self):
+        return normalize_name(self.name)
