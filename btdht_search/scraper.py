@@ -5,16 +5,18 @@ import struct
 import select
 import time
 import collections
-from btdht.utils import bdecode
+from btdht.utils import bdecode, BcodeError
 from requests_futures.sessions import FuturesSession
+from requests import ReadTimeout, ConnectTimeout, ConnectionError
+from requests.adapters import HTTPAdapter
 try:
     from urllib.parse import urlparse, urlunsplit
 except ImportError:
     from urlparse import urlparse, urlunsplit
 
 
-def scrape_max(trackers, hashes, udp_timeout=1):
-    results = scrape(trackers, hashes, udp_timeout=udp_timeout)
+def scrape_max(trackers, hashes, udp_timeout=1, tcp_timeout=1, tcp_max_workers=None):
+    results = scrape(trackers, hashes, udp_timeout=udp_timeout, tcp_timeout=tcp_timeout, tcp_max_workers=tcp_max_workers)
     results_trackers = set(results.keys())
 
     scrape_result = {}
@@ -22,18 +24,21 @@ def scrape_max(trackers, hashes, udp_timeout=1):
         scrape_result[hash] = {'complete': -1, 'peers': -1, 'seeds': -1}
     for result in results.values():
         for hash in result:
-            scrape_result[hash]['complete'] = max(
-                scrape_result[hash]['complete'],
-                result[hash]['complete']
-            )
-            scrape_result[hash]['peers'] = max(
-                scrape_result[hash]['peers'],
-                result[hash]['peers']
-            )
-            scrape_result[hash]['seeds'] = max(
-                scrape_result[hash]['seeds'],
-                result[hash]['seeds']
-            )
+            try:
+                scrape_result[hash]['complete'] = max(
+                    scrape_result[hash]['complete'],
+                    result[hash]['complete']
+                )
+                scrape_result[hash]['peers'] = max(
+                    scrape_result[hash]['peers'],
+                    result[hash]['peers']
+                )
+                scrape_result[hash]['seeds'] = max(
+                    scrape_result[hash]['seeds'],
+                    result[hash]['seeds']
+                )
+            except KeyError:
+                pass
     # delete hash where no results where returned
     for hash in hashes:
         if (
@@ -45,7 +50,7 @@ def scrape_max(trackers, hashes, udp_timeout=1):
     return (results_trackers, scrape_result)
 
 
-def scrape(trackers, hashes, udp_timeout=1):
+def scrape(trackers, hashes, udp_timeout=1, tcp_timeout=1, tcp_max_workers=None):
     """
     Returns the list of seeds, peers and downloads a torrent info_hash has,
     according to the specified trackers
@@ -86,7 +91,8 @@ def scrape(trackers, hashes, udp_timeout=1):
             (tracker, urlparse(tracker.replace("announce", "scrape")))
             for (tracker, parsed) in tcp_parsed_trackers
         ]
-        requests = scrape_http_requests(tcp_parsed_trackers, hashes)
+        session = FuturesSession(max_workers=(len(tcp_parsed_trackers) if tcp_max_workers is None else tcp_max_workers))
+        requests = scrape_http_requests(session, tcp_parsed_trackers, hashes, timeout=tcp_timeout)
 
     if udp_parsed_trackers:
         results.update(scrape_udp(udp_parsed_trackers, hashes, timeout=udp_timeout))
@@ -158,33 +164,35 @@ def scrape_udp(parsed_trackers, hashes, timeout=1):
     return results
 
 
-def scrape_http_requests(parsed_trackers, hashes):
+def scrape_http_requests(session, parsed_trackers, hashes, timeout=1):
     qs = []
     for hash in hashes:
         qs.append(("info_hash", hash))
     qs = urllib.urlencode(qs)
     requests = {}
-    session = FuturesSession()
     for (tracker, parsed_tracker) in parsed_trackers:
         pt = parsed_tracker
         url = urlunsplit((pt.scheme, pt.netloc, pt.path, qs, pt.fragment))
-        requests[tracker] = session.get(url)
+        requests[tracker] = session.get(url, timeout=timeout)
     return requests
 
 
 def scrape_http_get_response(requests):
     results = {}
     for (tracker, future) in requests.items():
-        response = future.result()
-        if response.status_code == 200:
-            decoded = bdecode(response.content)
-            ret = {}
-            for hash, stats in decoded['files'].iteritems():
-                s = stats["complete"]
-                p = stats["incomplete"]
-                c = stats["downloaded"]
-                ret[hash] = {"seeds": s, "peers": p, "complete": c}
-            results[tracker] = ret
+        try:
+            response = future.result()
+            if response.status_code == 200:
+                decoded = bdecode(response.content)
+                ret = {}
+                for hash, stats in decoded['files'].iteritems():
+                    s = stats["complete"]
+                    p = stats["incomplete"]
+                    c = stats["downloaded"]
+                    ret[hash] = {"seeds": s, "peers": p, "complete": c}
+                results[tracker] = ret
+        except (ReadTimeout, ConnectTimeout, ConnectionError, BcodeError) as error:
+            pass
     return results
 
 
