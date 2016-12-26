@@ -16,14 +16,22 @@
           <ul class="nav navbar-nav">
             {% url "btdht_search:index" as index_url %}
             {% url "btdht_search:recent_index" as recent_url %}
+            {% url "btdht_search:top_index" as top_url %}
             {% url "btdht_search:stats" as stats_url %}
             {% url "btdht_search:api" as api_url %}
             {% url "btdht_search:about" as about_url %}
             <li{% if request.path == index_url %} class="active"{% endif %}>
               <a href="{{index_url}}" title="Home"><span class="hidden-sm">Home</span><span class="glyphicon glyphicon-home visible-sm"></span></a>
             </li>
-            <li{% if recent_url in request.path %} class="active"{% endif %}>
-              <a href="{{recent_url}}" title="Recent torrents"><span class="hidden-sm">Recent torrents</span><span class="glyphicon glyphicon-plus visible-sm"></span></a>
+            <li class="dropdown{% if recent_url in request.path or top_url in request.path %} active{% endif %}">
+              <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
+                  <span class="hidden-sm">Explore <span class="caret"></span></span>
+                  <span class="glyphicon glyphicon-plus visible-sm"></span>
+              </a>
+              <ul class="dropdown-menu">
+                <li{% if recent_url in request.path %} class="active"{% endif %}><a href="{{recent_url}}">Recent torrents</a></li>
+                <li{% if top_url in request.path %} class="active"{% endif %}><a href="{{top_url}}">Top torrents</a></li>
+              </ul>
             </li>
             <li class="dropdown" id="favorites_navbar" style="display: none">
               <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false" title="Favorites">

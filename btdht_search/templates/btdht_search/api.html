@@ -105,6 +105,34 @@ $ curl {{recent_url|absolute_url:request}}
 ]
 </pre>
   </li>
+  <li>
+  Fetching top torrents:
+  {% url "btdht_search:api_top" 123456789 as top_url %}
+  <pre>{{top_url|replace:"123456789:<page_nb>"|absolute_url:request}}</pre>
+  For instance:
+{% url "btdht_search:api_top" 1 as top_url %}
+<pre>
+$ curl {{top_url|absolute_url:request}}
+[
+ {
+  "hash": "4e803a9d07492a5e8558d441b2a87b2b4ed67fde",
+  "complete": 48397,
+  "last_scrape": 1482774594,
+  "file_nb": 2,
+  "categories": [
+   "video"
+  ],
+  "size": 989948328,
+  "peers": 7843,
+  "name": "The Accountant (2016) [YTS.AG]",
+  "created": 1482610224,
+  "magnet": "magnet:?xt=urn:btih:4e803a9d07492a5e8558d441b2a87b2b4ed67fde&db=The%20Accountant%20%282016%29%20%5BYTS.AG%5D&tr=...",
+  "seeds": 8299
+ },
+...
+]
+</pre>
+  </li>
 </ul>
 Page 1 always exists. You will get a 404 not found error if trying to fetch above the last page
 {% endblock %}

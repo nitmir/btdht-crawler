@@ -166,6 +166,7 @@ class Scraper(object):
                 data = {"peers": peers, "seeds": seeds, "last_scrape": now}
                 if complete > -1:
                     data["complete"] = complete
+                data['seeds_peers'] = data["seeds"] + data["peers"]
                 self.db.update({'_id': Binary(hash)}, {"$set": data})
                 pbar.update(pbar.currval + 1)
         pbar.finish()

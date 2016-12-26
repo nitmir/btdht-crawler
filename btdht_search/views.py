@@ -115,7 +115,7 @@ def api_search(request, page=1, query=None, order_by=const.ORDER_BY_SCORE, asc='
     torrents = Torrent.search(query, page=page, request=request)
     if page > torrents.last_page:
         raise Http404()
-    return render_json(torrents.data(request))
+    return render_json(torrents.data())
 
 
 @require_safe
@@ -154,7 +154,7 @@ def info_torrent(request, hex_hash, name=None):
         torrent = Torrent(hex_hash.decode("hex"), request=request)
     except ValueError:
         raise Http404()
-    if not name:
+    if not name and name != torrent.name:
         return redirect("btdht_search:info_torrent", hex_hash, normalize_name(torrent.name))
     elif name != torrent.name and name != normalize_name(torrent.name):
         raise Http404()
@@ -208,7 +208,34 @@ def api_recent(request, page=1):
     torrents = Torrent.recent(page, request=request)
     if page > torrents.last_page:
         raise Http404()
-    return render_json(torrents.data(request))
+    return render_json(torrents.data())
+
+
+@require_safe
+def top(request, page=1):
+    page = int(page)
+    if page < 1:
+        return redirect("btdht_search:top", 1)
+    torrents = Torrent.top(page, settings.BTDHT_RECENT_MAX, request=request)
+    if page > torrents.last_page:
+        return redirect("btdht_search:top", torrents.last_page)
+    request.session["query"] = None
+    return render(
+        request,
+        "btdht_search/top.html",
+        context(request, {'torrents': torrents})
+    )
+
+@require_safe
+def api_top(request, page=1):
+    page = int(page)
+    if page < 1:
+        raise Http404()
+    torrents = Torrent.top(page, request=request)
+    if page > torrents.last_page:
+        raise Http404()
+    return render_json(torrents.data())
+
 
 
 @cache_page(30 * 60)

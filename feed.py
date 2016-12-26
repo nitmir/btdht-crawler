@@ -127,7 +127,7 @@ class Torrent(object):
         elif b'name' in torrent[b'info']:
             self.name = torrent[b'info'][b'name'].decode(encoding, 'ignore')
         else:
-            raise TorrentNoName(self.hash.encode("hex"))
+            self.name = ""
 
         try:
             self.created = int(torrent.get(b'creation date', int(time.time())))
@@ -235,6 +235,7 @@ class Manager(object):
             now = int(time.time())
             for hash, value in results.items():
                 value['last_scrape'] = now
+                value['seeds_peers'] = value["seeds"] + value["peers"]
                 try:
                     self.db2.update({"_id": Binary(hash)}, {"$set": value})
                 except pymongo.errors.PyMongoError:

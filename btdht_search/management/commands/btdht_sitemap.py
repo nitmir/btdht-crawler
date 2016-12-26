@@ -52,6 +52,7 @@ class Command(BaseCommand):
         self.gen_torrents(*args, **options)
         self.gen_static()
         self.gen_recent()
+        self.gen_top()
         self.gen_index(*args, **options)
 
     def gen_static(self):
@@ -80,47 +81,67 @@ class Command(BaseCommand):
         )
 
     def gen_recent(self):
-        print("Generating recent sitemap")
+        return self._gen_list(
+            "recent", {}, {'files': False}, [("created", -1)], "added", settings.BTDHT_RECENT_MAX
+        )
+
+    def gen_top(self):
+        return self._gen_list(
+            "top", {}, {'files': False}, [("seeds_peers", -1)], None, settings.BTDHT_RECENT_MAX
+        )
+
+    def _gen_list(self, name, query, proj, sort, key, limit):
+        print("Generating %s sitemap" % name)
         db = getdb()
         results = db.find(
-            {},
-            {'files': False}
+            query,
+            proj
         ).sort(
-            [("created", -1)]
+            sort
         ).limit(1)
-        last_change = results.next()["added"]
-        size = min(results.count(), settings.BTDHT_RECENT_MAX)
+        if key:
+            last_change = float(results.next()[key])
+        else:
+            last_change = None
+        size = min(results.count(), limit)
         last_page = int(size/settings.BTDHT_PAGE_SIZE) + 1
-        with gzip.open(os.path.join(settings.BTDHT_SITEMAP_DIR, "recent.xml.new.gz"), 'w') as f:
+        with gzip.open(os.path.join(settings.BTDHT_SITEMAP_DIR, "%s.xml.new.gz" % name), 'w') as f:
             f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
             f.write('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n')
             f.write('<url><loc>')
             f.write(escape(settings.BTDHT_SITEMAP_BASEURL))
-            f.write(escape(reverse("btdht_search:recent_index")))
-            f.write('</loc><lastmod>')
-            f.write(format_date(last_change, '%Y-%m-%dT%H:%M:%S+00:00'))
-            f.write('</lastmod><changefreq>hourly</changefreq>')
+            f.write(escape(reverse("btdht_search:%s_index" % name)))
+            f.write('</loc>')
+            if last_change:
+                f.write('<lastmod>')
+                f.write(format_date(last_change, '%Y-%m-%dT%H:%M:%S+00:00'))
+                f.write('</lastmod>')
+            f.write('<changefreq>hourly</changefreq>')
             f.write('</url>\n')
             for page in xrange(1, last_page+1):
                 f.write('<url><loc>')
                 f.write(escape(settings.BTDHT_SITEMAP_BASEURL))
-                f.write(escape(reverse("btdht_search:recent", args=[page])))
+                f.write(escape(reverse("btdht_search:%s" % name, args=[page])))
                 f.write('</loc>')
-                f.write('<lastmod>')
-                f.write(format_date(last_change, '%Y-%m-%dT%H:%M:%S+00:00'))
-                f.write('</lastmod><changefreq>hourly</changefreq>')
+                if last_change:
+                    f.write('<lastmod>')
+                    f.write(format_date(last_change, '%Y-%m-%dT%H:%M:%S+00:00'))
+                    f.write('</lastmod>')
+                f.write('<changefreq>hourly</changefreq>')
                 f.write('</url>\n')
             f.write('</urlset>')
-        with open(os.path.join(settings.BTDHT_SITEMAP_DIR, "recent.last_date.new"), 'w') as f:
-            f.write("%s" % last_change)
+        if last_change:
+            with open(os.path.join(settings.BTDHT_SITEMAP_DIR, "%s.last_date.new" % name), 'w') as f:
+                f.write("%s" % last_change)
         os.rename(
-            os.path.join(settings.BTDHT_SITEMAP_DIR, "recent.xml.new.gz"),
-            os.path.join(settings.BTDHT_SITEMAP_DIR, "recent.xml.gz")
+            os.path.join(settings.BTDHT_SITEMAP_DIR, "%s.xml.new.gz" % name),
+            os.path.join(settings.BTDHT_SITEMAP_DIR, "%s.xml.gz" % name)
         )
-        os.rename(
-            os.path.join(settings.BTDHT_SITEMAP_DIR, "recent.last_date.new"),
-            os.path.join(settings.BTDHT_SITEMAP_DIR, "recent.last_date")
-        )
+        if last_change:
+            os.rename(
+                os.path.join(settings.BTDHT_SITEMAP_DIR, "%s.last_date.new" % name),
+                os.path.join(settings.BTDHT_SITEMAP_DIR, "%s.last_date" % name)
+            )
 
     def gen_torrents(self, *args, **options):
         sitemap_pages = [

@@ -276,20 +276,33 @@ class Torrent(object):
         )
 
     @staticmethod
-    def recent(page, max_results=None, request=None):
+    def _list(sort, url, page, max_results, request):
         db = getdb()
-        results = db.find(
-            {},
-            {'files': False}
-        ).sort(
-            [("created", -1)]
+        results = db.find({}, {'files': False}).sort(
+            sort
         )
         return TorrentsList(
             results,
-            url=lambda page: reverse("btdht_search:recent", args=[page]) + '#recent',
+            url=url,
             page=page,
             max_results=max_results,
             request=request
+        )
+
+    @classmethod
+    def recent(cls, page, max_results=None, request=None):
+        return cls._list(	
+            [("created", -1)],
+            lambda page: reverse("btdht_search:recent", args=[page]) + '#recent',
+            page, max_results, request
+        )
+
+    @classmethod
+    def top(cls, page, max_results=None, request=None):
+        return cls._list(
+            [("seeds_peers", -1)],
+            lambda page: reverse("btdht_search:top", args=[page]),
+            page, max_results, request
         )
 
     def __init__(self, hash=None, obj=None, no_files=False, request=None):

@@ -87,6 +87,20 @@ urlpatterns = [
         token_auth(views.api_recent),
         name='api_recent_token'
     ),
+    url('^top$', require_login(views.top), name='top_index'),
+    url('^api/top.json', require_login(views.api_top), name='api_recent_index'),
+    url('^top/(?P<page>[0-9]+)$', require_login(views.top), name='top'),
+    url('^api/top/(?P<page>[0-9]+).json$', require_login(views.api_top), name='api_top'),
+    url(
+        '^api/auth/(?P<token>[0-9A-Fa-f]{32})/top.json$',
+        token_auth(views.api_top),
+        name='api_top_index_token'
+    ),
+    url(
+        '^api/auth/(?P<token>[0-9A-Fa-f]{32})/top/(?P<page>[0-9]+).json',
+        token_auth(views.api_top),
+        name='api_top_token'
+    ),
     url('^stats$', require_login(views.stats), name='stats'),
     url('^api$', require_login(views.api), name='api'),
     url('^about$', require_login(views.about), name='about'),

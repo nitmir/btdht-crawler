@@ -152,6 +152,7 @@ def scrape(hashs, refresh=False):
         now = int(time.time())
         for hash, value in scrape_result.items():
             value['last_scrape'] = now
+            value['seeds_peers'] = value["seeds"] + value["peers"]
             try:
                 db.update({"_id": Binary(hash)}, {"$set": value})
             except pymongo.errors.PyMongoError:
