@@ -60,6 +60,20 @@ BTDHT_TRACKERS = [
     "udp://tracker.internetwarriors.net:1337/announce",
     "udp://tracker.openbittorrent.com:80/announce",
     "udp://explodie.org:6969",
+
+    "udp://tracker.piratepublic.com:1337/announce",
+
+    'http://210.244.71.25:6969/announce',
+    'http://210.244.71.26:6969/announce',
+    'http://91.217.91.21:3218/announce',
+    'http://mgtracker.org:6969/announce',
+    'http://open.touki.ru/announce.php',
+    'http://p4p.arenabg.ch:1337/announce',
+    # 'http://p4p.arenabg.com:1337/announce',
+    'http://retracker.gorcomnet.ru/announce',
+    'http://tracker.dutchtracking.com/announce',
+    'http://tracker.filetracker.pl:8089/announce',
+    'http://tracker.grepler.com:6969/announce',
 ]
 
 BTDHT_TRACKERS_NO_SCRAPE = [
