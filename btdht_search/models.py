@@ -420,6 +420,7 @@ class Torrent(object):
                 ),
                 "js": js_template % (500, 500),
                 "txt": "Share on Google+",
+                "icon": "google-plus",
             }),
             ('reddit', {
                 "url": "https://www.reddit.com/submit?url=%s" % (

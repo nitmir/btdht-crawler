@@ -82,13 +82,13 @@ $(document).ready(function(){
 {% for name, share in torrent.social_share_urls %}
 {% if name in settings.BTDHT_SOCIAL_SHARE %}
   <a
-    class="btn btn-{{name}}"
+    class="btn btn-{{name}} btn-share"
     rel="nofollow"
     target="_blank"
     href="{{share.url|safe}}"
     title="{{share.txt}}"
     {% if share.js %}onclick="{{share.js|safe}}"{% endif %}
-  ><span class="fa fa-{% if share.icon %}{{share.icon}}{% else %}{{name}}{% endif %}"></span> {{share.txt}}</a>
+  ><span class="fa fa-{% if share.icon %}{{share.icon}}{% else %}{{name}}{% endif %}"></span></a>
 {% endif %}
 {% endfor %}
 {% endif %}

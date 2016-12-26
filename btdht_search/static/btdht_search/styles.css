@@ -138,3 +138,7 @@ select.select-noarrow::-ms-expand {
 .fb_iframe_widget span {
     vertical-align: baseline !important;
 }
+
+.btn-share {
+    width: 44px;
+}

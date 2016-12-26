@@ -63,9 +63,10 @@ $('#id_query').autocomplete({
 {% if settings.BTDHT_FACEBOOK_PAGE %}
 //facebook
 (function(d, s, id) {
-  var js, fjs = d.getElementsByTagName(s)[0];
+  var js, fjs = d.getElementsByTagName(s)[d.getElementsByTagName(s).length - 1];
   if (d.getElementById(id)) return;
   js = d.createElement(s); js.id = id;
+  js.async = true;
   js.src = "//connect.facebook.net/fr_FR/sdk.js#xfbml=1&version=v2.8";
   fjs.parentNode.insertBefore(js, fjs);
 }(document, 'script', 'facebook-jssdk'));
@@ -73,11 +74,12 @@ $('#id_query').autocomplete({
 {% if settings.BTDHT_TWITTER_NAME %}
 // twitter
 window.twttr = (function(d, s, id) {
-  var js, fjs = d.getElementsByTagName(s)[0],
+  var js, fjs = d.getElementsByTagName(s)[d.getElementsByTagName(s).length - 1],
     t = window.twttr || {};
   if (d.getElementById(id)) return t;
   js = d.createElement(s);
   js.id = id;
+  js.async = true;
   js.src = "https://platform.twitter.com/widgets.js";
   fjs.parentNode.insertBefore(js, fjs);
 
