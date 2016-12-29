@@ -6,6 +6,16 @@ ORDER_BY_FILES = '5'
 ORDER_BY_PEERS = '6'
 ORDER_BY_SEEDS = '7'
 
+order_by = [
+    ("search score", ORDER_BY_SCORE),
+    ("name", ORDER_BY_NAME),
+    ("size", ORDER_BY_SIZE),
+    ("created", ORDER_BY_CREATED),
+    ("files number", ORDER_BY_FILES),
+    ("peers", ORDER_BY_PEERS),
+    ("seeds", ORDER_BY_SEEDS),
+]
+
 categories = [
     'video',
     'audio',
