@@ -1,5 +1,8 @@
 {% load btdht_search %}User-Agent: *
 Allow: /
+Disallow: {% url "btdht_search:api" %}/
+Disallow: {% url "btdht_search:top_index" %}/
+Disallow: {% url "btdht_search:recent_index" %}/
 
 Sitemap: {% url "btdht_search:sitemap_index" as sitemap %}{{sitemap|absolute_url:request}}
 

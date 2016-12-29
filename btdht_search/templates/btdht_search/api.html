@@ -72,10 +72,10 @@ $ curl {{torrent_url|absolute_url:request}}
   </li>
   <li>
   Fetching recent torrents:
-  {% url "btdht_search:api_recent" 123456789 as recent_url %}
-  <pre>{{recent_url|replace:"123456789:<page_nb>"|absolute_url:request}}</pre>
+  {% url "btdht_search:api_recent" 1 2 as recent_url %}
+  <pre>{{recent_url|replace:"1:<category_id>"|replace:"2:<page_nb>"|absolute_url:request}}</pre>
   For instance:
-{% url "btdht_search:api_recent" 1 as recent_url %}
+{% url "btdht_search:api_recent" 0 1 as recent_url %}
 <pre>
 $ curl {{recent_url|absolute_url:request}}
 [
@@ -107,10 +107,10 @@ $ curl {{recent_url|absolute_url:request}}
   </li>
   <li>
   Fetching top torrents:
-  {% url "btdht_search:api_top" 123456789 as top_url %}
-  <pre>{{top_url|replace:"123456789:<page_nb>"|absolute_url:request}}</pre>
+  {% url "btdht_search:api_top" 1 2 as top_url %}
+  <pre>{{top_url|replace:"1:<category_id>"|replace:"2:<page_nb>"|absolute_url:request}}</pre>
   For instance:
-{% url "btdht_search:api_top" 1 as top_url %}
+{% url "btdht_search:api_top" 0 1 as top_url %}
 <pre>
 $ curl {{top_url|absolute_url:request}}
 [

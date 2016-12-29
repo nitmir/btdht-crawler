@@ -51,8 +51,6 @@ class Command(BaseCommand):
             )
         self.gen_torrents(*args, **options)
         self.gen_static()
-        self.gen_recent()
-        self.gen_top()
         self.gen_index(*args, **options)
 
     def gen_static(self):
@@ -63,6 +61,8 @@ class Command(BaseCommand):
             (reverse("btdht_search:api"), "weekly"),
             (reverse("btdht_search:about"), "weekly"),
             (reverse("btdht_search:dmca"), "hourly"),
+            (reverse("btdht_search:recent_index"), "hourly"),
+            (reverse("btdht_search:top_index"), "hourly"),
         ]
         with gzip.open(os.path.join(settings.BTDHT_SITEMAP_DIR, "static.xml.new.gz"), 'w') as f:
             f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
@@ -82,15 +82,17 @@ class Command(BaseCommand):
 
     def gen_recent(self):
         return self._gen_list(
-            "recent", {}, {'files': False}, [("created", -1)], "added", settings.BTDHT_RECENT_MAX
+            "recent", {}, {'files': False}, [("created", -1)], "added", settings.BTDHT_RECENT_MAX,
+            reverse("btdht_search:recent_index"), lambda page: reverse("btdht_search:recent", args=[page])
         )
 
     def gen_top(self):
         return self._gen_list(
-            "top", {}, {'files': False}, [("seeds_peers", -1)], None, settings.BTDHT_RECENT_MAX
+            "top", {}, {'files': False}, [("seeds_peers", -1)], None, settings.BTDHT_RECENT_MAX,
+            reverse("btdht_search:top_index"), lambda page: reverse("btdht_search:top", args=[0, page])
         )
 
-    def _gen_list(self, name, query, proj, sort, key, limit):
+    def _gen_list(self, name, query, proj, sort, key, limit, index, url):
         print("Generating %s sitemap" % name)
         db = getdb()
         results = db.find(
@@ -110,7 +112,7 @@ class Command(BaseCommand):
             f.write('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n')
             f.write('<url><loc>')
             f.write(escape(settings.BTDHT_SITEMAP_BASEURL))
-            f.write(escape(reverse("btdht_search:%s_index" % name)))
+            f.write(escape(index))
             f.write('</loc>')
             if last_change:
                 f.write('<lastmod>')
@@ -121,7 +123,7 @@ class Command(BaseCommand):
             for page in xrange(1, last_page+1):
                 f.write('<url><loc>')
                 f.write(escape(settings.BTDHT_SITEMAP_BASEURL))
-                f.write(escape(reverse("btdht_search:%s" % name, args=[page])))
+                f.write(escape(url(page)))
                 f.write('</loc>')
                 if last_change:
                     f.write('<lastmod>')

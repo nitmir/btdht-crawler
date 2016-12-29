@@ -185,53 +185,57 @@ def api_info_torrent(request, hex_hash):
 
 
 @require_safe
-def recent(request, page=1):
+def recent(request, category=0, page=1):
     page = int(page)
     if page < 1:
         return redirect("btdht_search:recent", 1)
-    torrents = Torrent.recent(page, settings.BTDHT_RECENT_MAX, request=request)
+    category = int(category)
+    torrents = Torrent.recent(page, category=category, max_results=settings.BTDHT_RECENT_MAX, request=request)
     if page > torrents.last_page:
         return redirect("btdht_search:recent", torrents.last_page)
     request.session["query"] = None
     return render(
         request,
         "btdht_search/recent.html",
-        context(request, {'torrents': torrents})
+        context(request, {'torrents': torrents, 'category': category})
     )
 
 
 @require_safe
-def api_recent(request, page=1):
+def api_recent(request, category=0, page=1):
     page = int(page)
     if page < 1:
         raise Http404()
-    torrents = Torrent.recent(page, request=request)
+    category = int(category)
+    torrents = Torrent.recent(page, category=category, max_results=settings.BTDHT_RECENT_MAX, request=request)
     if page > torrents.last_page:
         raise Http404()
     return render_json(torrents.data())
 
 
 @require_safe
-def top(request, page=1):
+def top(request, category=0, page=1):
     page = int(page)
     if page < 1:
         return redirect("btdht_search:top", 1)
-    torrents = Torrent.top(page, settings.BTDHT_RECENT_MAX, request=request)
+    category = int(category)
+    torrents = Torrent.top(page, category=category, max_results=settings.BTDHT_RECENT_MAX, request=request)
     if page > torrents.last_page:
         return redirect("btdht_search:top", torrents.last_page)
     request.session["query"] = None
     return render(
         request,
         "btdht_search/top.html",
-        context(request, {'torrents': torrents})
+        context(request, {'torrents': torrents, 'category': category})
     )
 
 @require_safe
-def api_top(request, page=1):
+def api_top(request, category=0, page=1):
     page = int(page)
     if page < 1:
         raise Http404()
-    torrents = Torrent.top(page, request=request)
+    category = int(category)
+    torrents = Torrent.top(page, category=category, max_results=settings.BTDHT_RECENT_MAX, request=request)
     if page > torrents.last_page:
         raise Http404()
     return render_json(torrents.data())

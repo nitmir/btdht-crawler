@@ -276,9 +276,9 @@ class Torrent(object):
         )
 
     @staticmethod
-    def _list(sort, url, page, max_results, request):
+    def _list(query, sort, url, page, max_results, request):
         db = getdb()
-        results = db.find({}, {'files': False}).sort(
+        results = db.find(query, {'files': False}).sort(
             sort
         )
         return TorrentsList(
@@ -290,18 +290,26 @@ class Torrent(object):
         )
 
     @classmethod
-    def recent(cls, page, max_results=None, request=None):
+    def recent(cls, page, category=0, max_results=None, request=None):
+        if category > 0:
+            search_query = {'categories': const.categories[category-1]}
+        else:
+            search_query = {}
         return cls._list(	
-            [("created", -1)],
-            lambda page: reverse("btdht_search:recent", args=[page]) + '#recent',
+            search_query, [("created", -1)],
+            lambda page: reverse("btdht_search:recent", args=[category, page]) + '#recent',
             page, max_results, request
         )
 
     @classmethod
-    def top(cls, page, max_results=None, request=None):
+    def top(cls, page, category=0, max_results=None, request=None):
+        if category > 0:
+            search_query = {'categories': const.categories[category-1]}
+        else:
+            search_query = {}
         return cls._list(
-            [("seeds_peers", -1)],
-            lambda page: reverse("btdht_search:top", args=[page]),
+            search_query, [("seeds_peers", -1)],
+            lambda page: reverse("btdht_search:top", args=[category, page]),
             page, max_results, request
         )
 

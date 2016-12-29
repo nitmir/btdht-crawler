@@ -19,6 +19,13 @@
 {% block content2 %}
 {% if settings.BTDHT_ADS_TEMPLATE %}{% include settings.BTDHT_ADS_TEMPLATE %}{% endif %}
 <h1 id="recent">Recent torrents</h1>
+<div class="text-center">
+<a class="btn btn-default{% if category == 0 %} active{% endif %}" href="{% if torrents.page == 1 %}{% url "btdht_search:recent_index" %}{% else %}{% url "btdht_search:recent" 0 torrents.page %}{% endif %}">All</a>
+{% for cat in const.categories %}
+<a class="btn btn-default{% if category == forloop.counter %} active{% endif %}" href="{% url "btdht_search:recent" forloop.counter torrents.page %}">{{cat}}</a>
+{% endfor %}
+</div>
+<br/>
 {% include "btdht_search/torrent_table.html" %}
 {% endblock %}
 
