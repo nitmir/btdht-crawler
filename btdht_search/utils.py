@@ -108,7 +108,7 @@ def format_date(timestamp, format='%Y-%m-%d %H:%M:%S', timezone='UTC'):
     ).replace(tzinfo=tzutc).astimezone(tzlocal).strftime(format)
 
 
-def scrape(hashs, refresh=False):
+def scrape(hashs, refresh=False, udp_timeout=2.5, tcp_timeout=1):
     db = getdb()
     result = {}
     if refresh is False:
@@ -138,7 +138,8 @@ def scrape(hashs, refresh=False):
         (result_trackers, scrape_result) = scrape_max(
             good_trackers,
             hashs_to_scrape,
-            udp_timeout=2.5
+            udp_timeout=udp_timeout,
+            tcp_timeout=tcp_timeout
         )
         for tracker in settings.BTDHT_TRACKERS:
             if (

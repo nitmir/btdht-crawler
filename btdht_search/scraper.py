@@ -7,7 +7,7 @@ import time
 import collections
 from btdht.utils import bdecode, BcodeError
 from requests_futures.sessions import FuturesSession
-from requests import ReadTimeout, ConnectTimeout, ConnectionError
+from requests.exceptions import RequestException
 from requests.adapters import HTTPAdapter
 try:
     from urllib.parse import urlparse, urlunsplit
@@ -191,7 +191,7 @@ def scrape_http_get_response(requests):
                     c = stats["downloaded"]
                     ret[hash] = {"seeds": s, "peers": p, "complete": c}
                 results[tracker] = ret
-        except (ReadTimeout, ConnectTimeout, ConnectionError, BcodeError) as error:
+        except (RequestException, BcodeError) as error:
             pass
     return results
 

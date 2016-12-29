@@ -16,6 +16,7 @@ import binascii
 import argparse
 import time
 import progressbar
+import pymongo
 
 from ...settings import settings
 from ...utils import getdb, scrape
@@ -35,7 +36,7 @@ def _scrape(results, pbar=None):
         #print "%s: %ss since last scrape" % (obj["_id"].encode("hex"), time.time() - obj["last_scrape"])
         hashes.append(obj['_id'])
         if len(hashes) >= 74:
-            scrape(hashes)
+            scrape(hashes, udp_timeout=2.5, tcp_timeout=2.5)
             if pbar:
                 pbar.update(pbar.currval + len(hashes))
                 hashes = []
@@ -155,7 +156,10 @@ class Command(BaseCommand):
         if options["loop"]:
             while True:
                 last = time.time()
-                self._process(*args, **options)
+                try:
+                    self._process(*args, **options)
+                except pymongo.errors.PyMongoError as error:
+                    print("%r" % error)
                 sleep(max(options["loop"] - (time.time() - last), 0))
         else:
             self._process(*args, **options)
