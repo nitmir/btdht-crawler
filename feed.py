@@ -190,7 +190,10 @@ class Manager(object):
         self.progress = progress
 
     def add_stats(self, force=False):
-        last_stats = self.db3.find().sort([('_id', -1)]).limit(1).next()
+        try:
+            last_stats = self.db3.find().sort([('_id', -1)]).limit(1).next()
+        except StopIteration:
+            last_stats = {'_id': -1}
         if force or time.time() - last_stats['_id'] >= 1800:
             torrent_indexed = self.db2.find().count()
             data = {"_id": int(time.time()), "torrent_indexed": torrent_indexed}
