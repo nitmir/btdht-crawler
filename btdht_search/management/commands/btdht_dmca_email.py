@@ -20,19 +20,23 @@ try:
 except ImportError:
     imaplib2 = None
 import binascii
+from django.urls import reverse
 
 from ...settings import settings
 from ...utils import dmca_ban
+from ...urls import urlpatterns
 
+# extract torrent info pattern from its url pattern definition
+info_torrent = [url for url in urlpatterns if url.name == 'info_torrent'][0]
+info_torrent_pattern = info_torrent.regex.pattern
+if info_torrent_pattern.startswith("^"):
+    info_torrent_pattern = info_torrent_pattern[1:]
+if info_torrent_pattern.endswith("$"):
+    info_torrent_pattern = info_torrent_pattern[:-1]
 
-URL_RE = re.compile(
-    """((?:[a-z][\\w-]+:(?:/{1,3}|[a-z0-9%])|www\\d{0,3}[.]|[a-z0-9.\\-]+[.][a-z]{2,4}/"""
-    """)(?:[^\\s()<>]+|\\(([^\\s()<>]+|(\\([^\\s()<>]+\\)))*\\))+(?:\\(([^\\s()<>]+|(\\"""
-    """([^\\s()<>]+\\)))*\\)|[^\\s`!()\\[\\]{};:'".,<>?«»""'']))"""
-)
-
-
-URL_HASH_RE = re.compile(".*/([0-9A-Fa-f]{40})/.*")
+# url starts always with http or https :// a domain name (no /) and a /, then,
+# we only match url corresponding to the torrent info pattern
+URL_RE = re.compile('(http?s://[^/]*/%s)' % info_torrent_pattern)
 
 
 class Break(Exception):
@@ -67,8 +71,9 @@ class DMCA(object):
         if status == 'OK' and data[0].endswith('Copy completed.'):
             self.imap.store(id_, '+FLAGS', '\\Deleted')
 
-    def get_url(self, id_):
+    def get_url_hash(self, id_):
         urls = set()
+        hashes = set()
         mail = self.fetch(id_)
         if (
             settings.BTDHT_DMCA_EMAIL_DKIM and
@@ -78,7 +83,7 @@ class DMCA(object):
             )
         ):
             sys.stderr.write("dkim failed, ignore mail id %s\n" % id_)
-            return
+            return (None, None)
         try:
             for header_name, header_values in settings.BTDHT_DMCA_EMAIL_ALLOWED_HEADERS.items():
                 for header_value in header_values:
@@ -95,34 +100,31 @@ class DMCA(object):
             sys.stderr.write(
                 "no allowed header found or not protected with dkim, ignore mail id %s\n" % id_
             )
-            return
-        if mail.is_multipart():
-            parts = mail.get_payload()
-        else:
-            parts = [mail]
+            return (None, None)
+        to_process = [mail]
+        parts = []
+        while to_process:
+            part = to_process.pop()
+            if part.is_multipart():
+                for p in part.get_payload():
+                    to_process.append(p)
+            else:
+                parts.append(part)
         for part in parts:
             data = part.get_payload(decode=True)
             for url in URL_RE.findall(data):
+                hash = url[1]
                 url = url[0]
                 if urlparse.urlparse(url).netloc in settings.ALLOWED_HOSTS:
                     urls.add(url)
-        return urls
-
-    def get_hash(self, id_):
-        hashes = set()
-        urls = self.get_url(id_)
-        if urls is not None:
-            for url in urls:
-                match = URL_HASH_RE.match(url)
-                if match is not None:
-                    hashes.add(match.group(1))
-            return hashes
+                    hashes.add(hash)
+        return (urls, hashes)
 
     def ban(self):
         try:
             for id_ in self.get_all_mail_id():
                 print("Processing mail id %s:" % id_)
-                hashes = self.get_hash(id_)
+                hashes = self.get_url_hash(id_)[1]
                 if hashes is not None:
                     for hash in hashes:
                         sys.stdout.write(" * %s" % hash)
@@ -142,7 +144,7 @@ class DMCA(object):
     def get_all_urls(self):
         urls = set()
         for id_ in self.get_all_mail_id():
-            urls_ = self.get_url(id_)
+            urls_ = self.get_url_hash(id_)[0]
             if urls_ is not None:
                 urls = urls | urls_
         return urls
@@ -150,7 +152,7 @@ class DMCA(object):
     def get_all_hash(self, urls=None):
         hashes = set()
         for id_ in self.get_all_mail_id():
-            hashes_ = self.get_hash(id_)
+            hashes_ = self.get_url_hash(id_)[1]
             if hashes_ is not None:
                 hashes = hashes | hashes_
         return hashes
@@ -168,21 +170,21 @@ class Command(BaseCommand):
             action='store_true',
             default=False,
             dest='list_new_hash',
-            help="Regenerate all sitemaps"
+            help="list new hash to ban"
         )
         parser.add_argument(
             '--list-new-urls',
             action='store_true',
             default=False,
             dest='list_new_urls',
-            help="Regenerate all sitemaps"
+            help="list new urls to ban"
         )
         parser.add_argument(
             '--ban-new',
             action='store_true',
             default=False,
             dest='ban_new',
-            help="Regenerate all sitemaps"
+            help="ban new urls"
         )
 
     def handle(self, *args, **options):

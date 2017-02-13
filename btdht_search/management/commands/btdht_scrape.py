@@ -17,9 +17,11 @@ import argparse
 import time
 import progressbar
 import pymongo
+import random
+import select
 
 from ...settings import settings
-from ...utils import getdb, scrape
+from ...utils import getdb, scrape, get_bad_trackers
 
 
 def _widget(what=""):
@@ -36,12 +38,15 @@ def _scrape(results, pbar=None):
         #print "%s: %ss since last scrape" % (obj["_id"].encode("hex"), time.time() - obj["last_scrape"])
         hashes.append(obj['_id'])
         if len(hashes) >= 74:
-            scrape(hashes, udp_timeout=2.5, tcp_timeout=2.5)
+            scrape(hashes, udp_timeout=3, tcp_timeout=2, tracker_retry_nb=5, save_index=2, bad_tracker_timeout=1800, refresh=True)
             if pbar:
-                pbar.update(pbar.currval + len(hashes))
+                try:
+                    pbar.update(pbar.currval + len(hashes))
+                except ValueError:
+                    pass
                 hashes = []
     if hashes:
-        scrape(hashes)
+        scrape(hashes, udp_timeout=3, tcp_timeout=2, tracker_retry_nb=5, save_index=2, bad_tracker_timeout=1800, refresh=True)
     if pbar:
         pbar.finish()
 
@@ -77,14 +82,33 @@ def scrape_recent(quiet=False):
         pbar = None
     _scrape(results, pbar)
 
+def filter_scraped(results, quiet=False):
+    if not quiet and results.count() > 0:
+        pbar = progressbar.ProgressBar(
+           widgets=_widget("filtering torrents"),
+           maxval=results.count()
+        )
+        pbar.start()
+    else:
+        pbar = None
+    objs = []
+    for obj in results:
+        if obj['last_scrape'] < (time.time() - settings.BTDHT_SCRAPE_INTERVAL):
+            objs.append(obj)
+        if pbar:
+            pbar.update(pbar.currval + 1)
+    if pbar:
+        pbar.finish()
+    return objs
+
 def scrape_top(quiet=False):
     db = getdb()
     now = time.time()
     results = db.find(
-        {},
+        {"seeds_peers": {"$gt": 0}},
         {'_id': True, 'last_scrape': True}
-    ).sort([('seeds_peers', -1)]).limit(settings.BTDHT_SCRAPE_TOP_NB)
-    objs = [obj for obj in results if obj['last_scrape'] < (time.time() - settings.BTDHT_SCRAPE_INTERVAL)]
+    ).sort([('seeds_peers', -1), ("seeds", -1)]).limit(settings.BTDHT_SCRAPE_TOP_NB)
+    objs = filter_scraped(results, quiet)
     print("Scraping %s top torrents" % len(objs))
     if not quiet and len(objs) > 0:
         pbar = progressbar.ProgressBar(
@@ -98,7 +122,7 @@ def scrape_top(quiet=False):
 
 
 def sleep(sleep, quiet=False):
-    if sleep> 0:
+    if sleep >= 1:
         sleep_widget = [
             progressbar.Bar('>'), ' ', progressbar.ETA(), ' ', progressbar.ReverseBar('<')
         ]
@@ -158,17 +182,17 @@ class Command(BaseCommand):
                 last = time.time()
                 try:
                     self._process(*args, **options)
-                except pymongo.errors.PyMongoError as error:
+                except (pymongo.errors.PyMongoError, select.error) as error:
                     print("%r" % error)
+                print("%s/%s bad trackers" % (len(get_bad_trackers(save_index=2)[0]), len(settings.BTDHT_TRACKERS) - len(settings.BTDHT_TRACKERS_NO_SCRAPE)))
                 sleep(max(options["loop"] - (time.time() - last), 0))
         else:
             self._process(*args, **options)
 
     def _process(self, *args, **options):
         quiet = options["quiet"]
-        if options["scrape_new"]:
-            scrape_new(quiet)
-        if options["scrape_recent"]:
-            scrape_recent(quiet)
-        if options["scrape_top"]:
-            scrape_top(quiet)
+        functs = [("scrape_new", scrape_new), ("scrape_recent", scrape_recent), ("scrape_top", scrape_top)]
+        random.shuffle(functs)
+        for name, func in functs:
+            if options[name]:
+                func(quiet)
