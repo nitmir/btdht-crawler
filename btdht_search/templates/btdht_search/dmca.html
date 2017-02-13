@@ -47,7 +47,7 @@ $(document).ready(function(){
 
 {% block content2 %}
 <h1>Found torrents no longer indexed</h1>
-<p>Here is the list of all torrents (currently {{results.count|intword}}) that where found crawling the DHT but are
+<p>Here is the list of all torrents (currently {{results|length|intword}}) that where found crawling the DHT but are
 no longer indexed (you will not find them doing a textual research) due to a DMCA request or
 equivalent</p>
 <div class="table-responsive2">

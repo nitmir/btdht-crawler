@@ -244,30 +244,33 @@ class Manager(object):
                     pass
             print "OK"
 
-    def _process_torrent(self, path):
+    def _process_torrent(self, path, move=True):
         try:
             torrent = Torrent(path)
             self.db2.update({'_id': Binary(torrent.hash)}, torrent.serialize(), upsert=True)
             self.db1.update({'_id': Binary(torrent.hash)}, {"$set": {"status": 2}}, upsert=True)
-            torrent.done_move()
+            if move:
+                torrent.done_move()
         except utils.BcodeError:
             os.rename(path, os.path.join(config.torrents_error, os.path.basename(path)))
+        except pymongo.errors.PyMongoError:
+            pass
         return torrent
 
     def reprocess_done_torrents(self):
-        for file1 in os.listdir(config.torrents_done):
+        for file1 in sorted(os.listdir(config.torrents_done)):
             path1 = os.path.join(config.torrents_done, file1)
-            for file2 in os.listdir(path1):
+            for file2 in sorted(os.listdir(path1)):
                 path2 = os.path.join(path1, file2)
-                for file3 in os.listdir(path2):
+                for file3 in sorted(os.listdir(path2)):
                     path3 = os.path.join(path2, file3)
-                    for file4 in os.listdir(path3):
+                    for file4 in sorted(os.listdir(path3)):
                         path4 = os.path.join(path3, file4)
                         for file in os.listdir(path4):
                             path = os.path.join(path4, file)
                             if path.endswith(".torrent"):
                                 print path
-                                self._process_torrent(path)
+                                self._process_torrent(path, move=False)
 
     def process_args(self, args):
         self.last_process = int(time.time())

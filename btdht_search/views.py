@@ -190,11 +190,11 @@ def api_info_torrent(request, hex_hash):
 def recent(request, category=0, page=1):
     page = int(page)
     if page < 1:
-        return redirect("btdht_search:recent", 1)
+        return redirect("btdht_search:recent", category, 1)
     category = int(category)
     torrents = Torrent.recent(page, category=category, max_results=settings.BTDHT_RECENT_MAX, request=request)
     if page > torrents.last_page:
-        return redirect("btdht_search:recent", torrents.last_page)
+        return redirect("btdht_search:recent", category, torrents.last_page)
     request.session["query"] = None
     return render(
         request,
@@ -219,11 +219,11 @@ def api_recent(request, category=0, page=1):
 def top(request, category=0, page=1):
     page = int(page)
     if page < 1:
-        return redirect("btdht_search:top", 1)
+        return redirect("btdht_search:top", category, 1)
     category = int(category)
     torrents = Torrent.top(page, category=category, max_results=settings.BTDHT_RECENT_MAX, request=request)
     if page > torrents.last_page:
-        return redirect("btdht_search:top", torrents.last_page)
+        return redirect("btdht_search:top", category, torrents.last_page)
     request.session["query"] = None
     return render(
         request,
