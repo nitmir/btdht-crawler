@@ -29,10 +29,11 @@ import re
 import netaddr
 from six.moves import urllib
 from bson.binary import Binary
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 from geoip2.errors import AddressNotFoundError
 import pytz
+import collections
 
 from .scraper import scrape_max
 import const
@@ -259,5 +260,24 @@ def dmca_unban(hash):
             {"$set": {'status': 0}},
             upsert=True
         )
+
+
+def delta_pp(timestamp):
+    delta = timedelta(seconds=int(time.time()) - timestamp)
+    total_seconds = int(delta.total_seconds())
+    if total_seconds < 60:
+        return "%ss ago" % total_seconds
+    elif total_seconds < 3600:
+        minutes = total_seconds // 60
+        return "%smin ago" % (minutes)
+    elif total_seconds < 3600 * 24:
+        hours = total_seconds // 3600
+        minutes = (total_seconds - hours * 3600) // 60
+        return "%sh %smin ago" % (hours, minutes)
+    else:
+        days = total_seconds // (3600 * 24)
+        hours = (total_seconds - days * 3600 * 24) // 3600
+        minutes = (total_seconds - hours * 3600 - days * 3600 * 24) // 60
+        return "%s days, %sh %smin ago" % (days, hours, minutes)
 
 import models

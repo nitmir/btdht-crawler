@@ -456,6 +456,16 @@ class Torrent(object):
             "never"
 
     @property
+    def last_scrape_delta(self):
+        if self.last_scrape is not None:
+            return time.time() - self.last_scrape
+
+    @property
+    def last_scrape_delta_pp(self):
+        if self.last_scrape is not None:
+            return utils.delta_pp(self.last_scrape)
+
+    @property
     def dmca_deleted_pp(self):
         if self.dmca_deleted is not None:
             return format_date(self.dmca_deleted, timezone=self._timezone)
@@ -466,22 +476,7 @@ class Torrent(object):
 
     @property
     def created_delta_pp(self):
-        delta = timedelta(seconds=int(time.time()) - self.created)
-        total_seconds = int(delta.total_seconds())
-        if total_seconds < 60:
-            return "%ss ago" % total_seconds
-        elif total_seconds < 3600:
-            minutes = total_seconds // 60
-            return "%smin ago" % (minutes)
-        elif total_seconds < 3600 * 24:
-            hours = total_seconds // 3600
-            minutes = (total_seconds - hours * 3600) // 60
-            return "%sh %smin ago" % (hours, minutes)
-        else:
-            days = total_seconds // (3600 * 24)
-            hours = (total_seconds - days * 3600 * 24) // 3600
-            minutes = (total_seconds - hours * 3600 - days * 3600 * 24) // 60
-            return "%s days, %sh %smin ago" % (days, hours, minutes)
+        return utils.delta_pp(self.created)
 
     def categories_pp(self):
         if self.categories:

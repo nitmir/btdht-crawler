@@ -94,7 +94,7 @@ $(document).ready(function(){
 {% endif %}
 </div>
 <h2>Torrent status</h2>
-<p class="pull-left">Last scrape at {{torrent.last_scrape_pp}}.</p>
+<p class="pull-left">Last scrape {% if torrent.last_scrape and torrent.last_scrape_delta < 86400 %}{{torrent.last_scrape_delta_pp}}{% else %}at {{torrent.last_scrape_pp}}{% endif %}.</p>
 <form method="post" class="pull-left">
 {% csrf_token %}
 <input type="hidden" name="scrape" value="1"/>
