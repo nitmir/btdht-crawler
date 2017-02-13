@@ -11,6 +11,7 @@
 # (c) 2015-2016 Valentin Samir
 """urls for the app"""
 from django.conf.urls import url
+from django.views.decorators.cache import cache_page
 
 from .utils import require_login, token_auth
 

@@ -279,7 +279,7 @@ def api_top(request, category=0, page=1):
 
 
 
-@cache_page(30 * 60)
+@cache_page(60)
 @require_safe
 def stats(request):
     db = getdb("torrents_stats")
@@ -432,6 +432,7 @@ def robots_txt(request):
 
 
 @require_safe
+@cache_page(1800)
 def dmca(request):
     db = getdb("torrents_ban")
     results = db.find({}, {'files': False}).sort([("dmca_deleted", -1), ('name', 1), ('_id', 1)])

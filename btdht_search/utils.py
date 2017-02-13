@@ -19,6 +19,7 @@ from django.http import HttpResponse
 from django.contrib.auth import login
 from django.contrib.gis.geoip2 import GeoIP2
 from django.utils.http import urlquote
+from django.core.cache import cache
 
 import os
 import pymongo
