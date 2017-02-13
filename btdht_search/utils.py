@@ -112,7 +112,12 @@ def format_date(timestamp, format='%Y-%m-%d %H:%M:%S', timezone='UTC'):
     ).replace(tzinfo=tzutc).astimezone(tzlocal).strftime(format)
 
 
-def scrape(hashs, refresh=False, udp_timeout=2.5, tcp_timeout=1):
+def get_bad_trackers(save_index=1):
+    bad_tracker = cache.get("btdht_search:bad_tracker:%s" % save_index, {})
+    bad_tracker_missed = cache.get("btdht_search:bad_tracker_missed:%s" % save_index, collections.defaultdict(int))
+    return (bad_tracker, bad_tracker_missed)
+
+def scrape(hashs, refresh=False, udp_timeout=2.5, tcp_timeout=1, tracker_retry_nb=3, save_index=1, bad_tracker_timeout=180):
     db = getdb()
     result = {}
     if refresh is False:
@@ -131,9 +136,9 @@ def scrape(hashs, refresh=False, udp_timeout=2.5, tcp_timeout=1):
                     }
     hashs_to_scrape = [h for h in hashs if h not in result]
     if hashs_to_scrape:
-        bad_tracker = scrape.bad_tracker
+        (bad_tracker, bad_tracker_missed) = get_bad_trackers(save_index)
         for tracker in bad_tracker.keys():
-            if time.time() - bad_tracker[tracker] > 600:
+            if time.time() - bad_tracker[tracker] > bad_tracker_timeout:
                 del bad_tracker[tracker]
         good_trackers = [
             tracker for tracker in settings.BTDHT_TRACKERS
@@ -151,8 +156,20 @@ def scrape(hashs, refresh=False, udp_timeout=2.5, tcp_timeout=1):
                 tracker not in bad_tracker and
                 tracker not in settings.BTDHT_TRACKERS_NO_SCRAPE
             ):
-                bad_tracker[tracker] = time.time()
-        scrape.bad_tracker = bad_tracker
+                bad_tracker_missed[tracker] += 1
+                if bad_tracker_missed[tracker] >= tracker_retry_nb:
+                    bad_tracker[tracker] = time.time()
+            elif tracker in result_trackers:
+                try:
+                    del bad_tracker_missed[tracker]
+                except KeyError:
+                    pass
+                try:
+                    del bad_tracker[tracker]
+                except KeyError:
+                    pass
+        cache.set("btdht_search:bad_tracker:%s" % save_index, bad_tracker, bad_tracker_timeout)
+        cache.set("btdht_search:bad_tracker_missed:%s" % save_index, bad_tracker_missed, bad_tracker_timeout)
         result.update(scrape_result)
         now = int(time.time())
         for hash, value in scrape_result.items():
@@ -163,7 +180,6 @@ def scrape(hashs, refresh=False, udp_timeout=2.5, tcp_timeout=1):
             except pymongo.errors.PyMongoError:
                 pass
         return result
-scrape.bad_tracker = {}
 
 
 def require_login(funct):

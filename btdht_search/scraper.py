@@ -137,9 +137,12 @@ def scrape_udp(parsed_trackers, hashes, timeout=1):
                         hashes_to_scrape = hashes[hash_id * 74: (hash_id+1) * 74]
                     # 2 for scrape response
                     elif status == action == 2:
-                        results[tracker].update(
-                            udp_parse_scrape_response(buf, transaction_id, hashes)
-                        )
+                        try:
+                            results[tracker].update(
+                                udp_parse_scrape_response(buf, transaction_id, hashes)
+                            )
+                        except (RuntimeError, struct.error):
+                            pass
                         hashes_to_scrape = hashes[hash_id * 74: (hash_id+1) * 74]
                     elif action == 3:
                         print("%s error: %s" % (tracker, udp_parse_error(buf, transaction_id)))
@@ -185,13 +188,13 @@ def scrape_http_get_response(requests):
             if response.status_code == 200:
                 decoded = bdecode(response.content)
                 ret = {}
-                for hash, stats in decoded['files'].iteritems():
+                for hash, stats in decoded.get('files', {}).iteritems():
                     s = stats["complete"]
                     p = stats["incomplete"]
                     c = stats["downloaded"]
                     ret[hash] = {"seeds": s, "peers": p, "complete": c}
                 results[tracker] = ret
-        except (RequestException, BcodeError) as error:
+        except (RequestException, BcodeError, AttributeError) as error:
             pass
     return results
 

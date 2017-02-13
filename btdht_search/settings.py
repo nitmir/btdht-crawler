@@ -61,7 +61,6 @@ BTDHT_TRACKERS = [
 
     "udp://tracker.desu.sh:6969",
 
-    "udp://tracker.internetwarriors.net:1337/announce",
     "udp://tracker.openbittorrent.com:80/announce",
     "udp://explodie.org:6969",
 
@@ -130,6 +129,8 @@ BTDHT_SOCIAL_SHARE = ["twitter", "facebook", "google", "reddit"]
 
 BTDHT_FACEBOOK_PAGE = None
 BTDHT_TWITTER_NAME = None
+
+BTDHT_LIVE_SCRAPE = False
 
 GLOBALS = globals().copy()
 for name, default_value in GLOBALS.items():

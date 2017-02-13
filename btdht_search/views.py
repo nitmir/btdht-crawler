@@ -299,7 +299,7 @@ def stats(request):
     torrent_rate = []
     torrent_rate_last = None
     torrent_rate_av_list = []
-    bad_tracker = scrape.bad_tracker.keys()
+    bad_tracker = utils.get_bad_trackers()[0].keys()
     bad_tracker.extend(settings.BTDHT_TRACKERS_NO_SCRAPE)
     good_tracker = [tracker for tracker in settings.BTDHT_TRACKERS if tracker not in bad_tracker]
     last_week = time.time() - 2.5 * 3600 * 24
@@ -333,7 +333,10 @@ def stats(request):
             y = result.get(cat, 0)
             if y > 0:
                 categories[cat].append({'x': x, 'y': y})
-    torrent_rate_av = round(sum(torrent_rate_av_list, 0) / len(torrent_rate_av_list), 2)
+    if torrent_rate_av_list:
+        torrent_rate_av = round(sum(torrent_rate_av_list, 0) / len(torrent_rate_av_list), 2)
+    else:
+        torrent_rate_av = 0
     colors = [(int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16)) for c in const.categories_colors]
     json_cat = []
     for i, cat in enumerate(const.categories):
@@ -345,7 +348,11 @@ def stats(request):
     dmca = [('%s' % key, value) for key, value in dmca.items()]
     dmca.sort()
     dmca = dmca[1:]
-    dmca_labels, dmca_values = zip(*dmca)
+    if dmca:
+        dmca_labels, dmca_values = zip(*dmca)
+    else:
+        dmca_labels = []
+        dmca_values = []
 
     return render(
         request,
