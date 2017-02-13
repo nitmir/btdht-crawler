@@ -10,12 +10,14 @@ import argparse
 import progressbar
 import mimetypes
 import collections
+import random
 from bson.binary import Binary
 from btdht import utils
 
 import config
 import categories
 from btdht_search.scraper import scrape_max
+from utils import getdb
 
 
 class TorrentNoName(ValueError):
@@ -182,9 +184,9 @@ class Manager(object):
     last_process = 0
 
     def __init__(self, progress=False):
-        self.db1 = pymongo.MongoClient()[config.mongo["db"]]["torrents"]
-        self.db2 = pymongo.MongoClient()[config.mongo["db"]]["torrents_data"]
-        self.db3 = pymongo.MongoClient()[config.mongo["db"]]["torrents_stats"]
+        self.db1 = getdb("torrents")
+        self.db2 = getdb("torrents_data")
+        self.db3 = getdb("torrents_stats")
         self.progress = progress
 
     def add_stats(self, force=False):

@@ -18,6 +18,7 @@ from bson.binary import Binary
 import config
 import resource
 import torrent
+from utils import getdb
 
 
 class SharedObject(object):
@@ -30,7 +31,7 @@ class HashToIgnore(object):
 
     def __init__(self, db=None):
         if db is None:
-            self.db = pymongo.MongoClient()[config.mongo["db"]]["torrents"]
+            self.db = getdb("torrents")
         else:
             self.db = db
 
@@ -95,7 +96,7 @@ class Crawler(DHT):
     def start(self):
         # doing some initialisation
         if self.master:
-            self.share.db = pymongo.MongoClient()[config.mongo["db"]]["torrents"]
+            self.share.db = getdb("torrents")
             self.share.hash_to_ignore = HashToIgnore(self.share.db)
             self.share.bad_info_hash = {}
             self.share.good_info_hash = {}

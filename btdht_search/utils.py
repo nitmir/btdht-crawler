@@ -79,7 +79,10 @@ def getdb(collection="torrents_data"):
     try:
         return getdb.db[collection]
     except AttributeError:
-        getdb.db = pymongo.MongoClient()[settings.BTDHT_MONGODB]
+        db = pymongo.MongoClient(settings.BTDHT_MONGO_HOST, settings.BTDHT_MONGO_PORT)[settings.BTDHT_MONGODB]
+        if settings.BTDHT_MONGO_USER:
+            db.authenticate(settings.BTDHT_MONGO_USER, settings.BTDHT_MONGO_PWD, mechanism='SCRAM-SHA-1')
+        getdb.db = db
         return getdb.db[collection]
 
 

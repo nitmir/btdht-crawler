@@ -5,6 +5,11 @@ debug = 0
 
 mongo = {
     "db": "btdht-crawler",
+    "host": "127.0.0.1",
+    "port": 27017,
+    "user": None,
+    "pwd": None,
+
 }
 
 # crawler udp base port. port will be choosen (deterministically)

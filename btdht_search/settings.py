@@ -40,6 +40,10 @@ BTDHT_COMPONENT_URLS = {
 
 
 BTDHT_MONGODB = "btdht-crawler"
+BTDHT_MONGO_USER = None
+BTDHT_MONGO_PWD = None
+BTDHT_MONGO_HOST = "localhost"
+BTDHT_MONGO_PORT = 27017
 
 BTDHT_TRACKERS = [
     "udp://tracker.leechers-paradise.org:6969/announce",
