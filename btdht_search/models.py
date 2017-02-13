@@ -32,7 +32,7 @@ class TorrentsList(object):
 
     def __init__(
         self, cursor, url, page=1, max_results=None, order_by=None,
-        asc=True, order_url=None, request=None
+        asc=True, order_url=None, request=None, page_size=settings.BTDHT_PAGE_SIZE
     ):
         self._request = request
         if request is not None:
@@ -59,8 +59,8 @@ class TorrentsList(object):
                 cursor = cursor.sort([("seeds", 1 if asc else -1)])
             else:
                 self.order_by = None
-        skip = settings.BTDHT_PAGE_SIZE * (page - 1)
-        limit = settings.BTDHT_PAGE_SIZE
+        skip = page_size * (page - 1)
+        limit = page_size
         self.page = page
         self._cursor = cursor.skip(skip).limit(limit)
         if max_results is not None:
@@ -70,7 +70,7 @@ class TorrentsList(object):
         self.start = skip
         self.end = skip + limit if limit > 0 else self.size
 
-        self.last_page = int(self.size/settings.BTDHT_PAGE_SIZE) + 1
+        self.last_page = int(self.size/page_size) + 1
 
         self.start_page = max(1, page - 26)
         self.end_page = min(self.last_page, page + 26)
@@ -120,7 +120,7 @@ class TorrentsList(object):
                     (time.time() - result['last_scrape']) > settings.BTDHT_SCRAPE_BROWSE_INTERVAL
                 ):
                     to_scrape.append(str(result['_id']))
-            if to_scrape:
+            if settings.BTDHT_LIVE_SCRAPE and to_scrape:
                 scrape_result = scrape(to_scrape)
                 for result in torrents:
                     result.update(scrape_result.get(str(result['_id']), {}))
@@ -276,7 +276,7 @@ class Torrent(object):
         )
 
     @staticmethod
-    def _list(query, sort, url, page, max_results, request):
+    def _list(query, sort, url, page, max_results, request, page_size=settings.BTDHT_PAGE_SIZE):
         db = getdb()
         results = db.find(query, {'files': False}).sort(
             sort
@@ -286,11 +286,12 @@ class Torrent(object):
             url=url,
             page=page,
             max_results=max_results,
-            request=request
+            request=request,
+            page_size=page_size
         )
 
     @classmethod
-    def recent(cls, page, category=0, max_results=None, request=None):
+    def recent(cls, page, category=0, max_results=None, request=None, page_size=settings.BTDHT_PAGE_SIZE):
         if category > 0:
             search_query = {'categories': const.categories[category-1]}
         else:
@@ -298,19 +299,18 @@ class Torrent(object):
         return cls._list(	
             search_query, [("created", -1)],
             lambda page: reverse("btdht_search:recent", args=[category, page]) + '#recent',
-            page, max_results, request
+            page, max_results, request, page_size
         )
 
     @classmethod
-    def top(cls, page, category=0, max_results=None, request=None):
+    def top(cls, page, category=0, max_results=None, request=None, page_size=settings.BTDHT_PAGE_SIZE):
+        search_query = {"seeds_peers": {"$gt": 0}}
         if category > 0:
-            search_query = {'categories': const.categories[category-1]}
-        else:
-            search_query = {}
+            search_query['categories'] = const.categories[category-1]
         return cls._list(
-            search_query, [("seeds_peers", -1)],
+            search_query, [("seeds_peers", -1), ("seeds", -1)],
             lambda page: reverse("btdht_search:top", args=[category, page]),
-            page, max_results, request
+            page, max_results, request, page_size
         )
 
     def __init__(self, hash=None, obj=None, no_files=False, request=None):

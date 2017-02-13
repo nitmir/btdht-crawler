@@ -76,6 +76,7 @@ urlpatterns = [
     url('^recent$', require_login(views.recent), name='recent_index'),
     url('^api/recent.json$', require_login(views.api_recent), name='api_recent_index'),
     url('^recent/(?P<category>[0-7])/(?P<page>[0-9]+)$', require_login(views.recent), name='recent'),
+    url('^rss/recent/(?P<category>[0-7])$', require_login(cache_page(60)(views.RecentFeed())), name='recent_rss'),
     url('^api/recent/(?P<category>[0-7])/(?P<page>[0-9]+).json', require_login(views.api_recent), name='api_recent'),
     url(
         '^api/auth/(?P<token>[0-9A-Fa-f]{32})/recent.json$',
@@ -90,6 +91,7 @@ urlpatterns = [
     url('^top$', require_login(views.top), name='top_index'),
     url('^api/top.json', require_login(views.api_top), name='api_recent_index'),
     url('^top/(?P<category>[0-7])/(?P<page>[0-9]+)$', require_login(views.top), name='top'),
+    url('^rss/top/(?P<category>[0-7])$', require_login(cache_page(60)(views.TopFeed())), name='top_rss'),
     url('^api/top/(?P<category>[0-7])/(?P<page>[0-9]+).json$', require_login(views.api_top), name='api_top'),
     url(
         '^api/auth/(?P<token>[0-9A-Fa-f]{32})/top.json$',

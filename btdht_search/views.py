@@ -5,6 +5,8 @@ from django.shortcuts import render, redirect
 from django.core.exceptions import PermissionDenied
 from django.views.decorators.http import require_http_methods, require_safe
 from django.views.decorators.cache import cache_page
+from django.contrib.syndication.views import Feed
+from django.core.urlresolvers import reverse
 from wsgiref.util import FileWrapper
 
 from btdht.utils import bencode, bdecode
@@ -228,6 +230,41 @@ def top(request, category=0, page=1):
         "btdht_search/top.html",
         context(request, {'torrents': torrents, 'category': category})
     )
+
+
+class ListFeed(Feed):
+
+    def get_object(self, request, category=0):
+        self.category = int(category)
+        self.request = request
+        return super(ListFeed, self).get_object(request, category)
+
+    def item_title(self, item):
+        return item.name
+
+    def item_link(self, item):
+        return item.info_url
+
+    def item_pubdate(self, item):
+        return datetime.utcfromtimestamp(item.created)
+
+class TopFeed(ListFeed):
+    title = "Torrent top 1000"
+    description = "Torrent top 1000 sorted by peers + seeds number"
+    def link(self):
+        return reverse("btdht_search:top_rss", kwargs=dict(category=0))
+
+    def items(self):
+        return Torrent.top(1, self.category, max_results=settings.BTDHT_RECENT_MAX, request=self.request, page_size=1000)
+
+class RecentFeed(ListFeed):
+    title = "Recent torrents"
+    description = "The 1000 most recent torrent added to the database"
+    def link(self):
+        return reverse("btdht_search:recent_rss", kwargs=dict(category=0))
+
+    def items(self):
+        return Torrent.recent(1, self.category, max_results=settings.BTDHT_RECENT_MAX, request=self.request, page_size=1000)
 
 @require_safe
 def api_top(request, category=0, page=1):
