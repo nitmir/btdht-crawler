@@ -303,19 +303,21 @@ class Crawler(DHT):
         self.get_peers(hash, delay=15, block=False, callback=callback, limit=1000)
 
 
-def get_id(id_file):
+def get_id(id_file, others=[]):
     try:
         with open(id_file) as f:
             return ID(f.read(20))
     except IOError:
         print("generating new id")
         id = ID()
+        while id[0] in others:
+            id = ID()
         with open(id_file, "w+") as f:
-            f.write(str(id))
+            f.write(id.value)
         return id
 
 
-def lauch(debug, id_file="crawler1.id", lprefix="", worker_alive=None):
+def lauch(debug, index_nb, id_file="crawler1.id", lprefix="", worker_alive=None):
     global stoped
     print "%slauch %s" % (lprefix, id_file)
     resource.setrlimit(resource.RLIMIT_NOFILE, (4096, 4096))
@@ -334,10 +336,16 @@ def lauch(debug, id_file="crawler1.id", lprefix="", worker_alive=None):
     with open(pidfile, 'w') as f:
         f.write(str(pid))
 
-    port_base = config.crawler_base_port
+    if len(config.crawler_base_port) < config.crawler_worker:
+        ratio = max(config.crawler_worker // len(config.crawler_base_port), 1)
+        pool = index_nb // ratio
+        port_base = config.crawler_base_port[pool]
+    else:
+        port_base = config.crawler_base_port[index_nb]
     prefix = 1
     scheduler = Scheduler()
     share = SharedObject()
+    print "%s%02d: using port %s" % (lprefix, prefix, port_base + ord(id_base[0]))
     dht_base = Crawler(
         bind_port=port_base + ord(id_base[0]),
         id=id_base,
@@ -354,9 +362,11 @@ def lauch(debug, id_file="crawler1.id", lprefix="", worker_alive=None):
         if id == id_base:
             continue
         prefix += 1
+        bind_port = port_base + ord(id[0])
         liveness.append(
             Crawler(
-                bind_port=port_base + ord(id[0]),
+
+                bind_port=bind_port,
                 id=ID(id),
                 debuglvl=debug,
                 prefix="%s%02d:" % (lprefix, prefix),
@@ -413,12 +423,17 @@ def worker(debug):
     jobs = {}
     try:
         worker_alive = multiprocessing.Value('i', int(time.time()))
+        others_ids = []
         for i in range(1, config.crawler_worker + 1):
+            id_file = os.path.join(config.data_dir, "crawler%s.id" % i)
+            id = get_id(id_file, others_ids)
+            others_ids.append(id[0])
             jobs[i] = multiprocessing.Process(
                 target=lauch,
                 args=(
                     debug,
-                    os.path.join(config.data_dir, "crawler%s.id" % i),
+                    (i - 1),
+                    id_file,
                     "W%s:" % i,
                     worker_alive
                 )
@@ -462,7 +477,7 @@ def worker(debug):
                     print("crawler%s died, respawning" % i)
                     jobs[i] = multiprocessing.Process(
                         target=lauch,
-                        args=(debug, os.path.join(config.data_dir, "crawler%s.id" % i), "W%s:" % i)
+                        args=(debug, (i-1), os.path.join(config.data_dir, "crawler%s.id" % i), "W%s:" % i)
                     )
                     jobs[i].start()
                     try:
@@ -498,4 +513,6 @@ if __name__ == '__main__':
     for file in os.listdir(config.torrents_dir):
         if file.endswith('.new'):
             os.remove(os.path.join(config.torrents_dir, file))
+    if not isinstance(config.crawler_base_port, list):
+        config.crawler_base_port = [config.crawler_base_port]
     worker(debug)

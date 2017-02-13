@@ -18,7 +18,7 @@ mongo = {
 # byte of the id are equals beetween 2 worken
 # then you will have an error saying port already in use
 # just remove one of the crawler%d.id and restart
-crawler_base_port = 12345
+crawler_base_port = [12345]
 
 # number of process to span for crawling the dht
 # one by proc is good, more is useless, increase
